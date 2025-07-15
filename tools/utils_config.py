@@ -34,7 +34,7 @@ def parse_dot_args(dot_args: list[str]) -> dict[str, Any]:
     overrides = {}
     for arg in dot_args:
         key, value = arg.split('=', 1)
-        parts = key.split('.')
+        parts = [yaml.safe_load(p) for p in key.split('.')]
         current = overrides
         for p in parts[:-1]:
             current = current.setdefault(p, {})

@@ -57,7 +57,7 @@ checkpoints=(
     # "/home/tmlinare/Lund_tagging/lundtoptagger_data_rcif/models/hypatia_run34_v2.1.5_adversarial_rafael_graphs_SmallerW_Weights/LundNet_R22_ExtraNode_ln_kT_Cut_None_LRJ_NewData_Primary_comb_e200_0.03981.pt"
     # "/home/tmlinare/Lund_tagging/lundtoptagger_data_rcif/models/hypatia_run31_v2.1.5_top_1percent_flat_pt_masscut80/LundNet_R22_ExtraNode_ln_kT_Cut_None_LRJ_NewData_Primary_e031_0.05684.pt"
     # "/home/tmlinare/Lund_tagging/lundtoptagger_data_rcif/models/hypatia_run32_v2.1.5_top_1percent_flat_pt_masscut80_GN2X/LundNet_GN2X_R22_ExtraNode_ln_kT_Cut_None_LRJ_NewData_Primary_e021_0.03471.pt"
-    "/home/tmlinare/Lund_tagging/lundtoptagger_data_rcif/models/jecifuen_checkpoints/LundNet_R22_No_ln_kT_Cut_LRJ_NewDatae017_0.62835.pt"
+    "/home/tmlinare/Lund_tagging/lundtoptagger_data_rcif/models/jecifuen_checkpoints/2025_Models_1qcd_10W/LundNet_R22_No_ln_kT_Cut_LRJ_NewDatae017_0.62835.pt"
     "/home/tmlinare/Lund_tagging/lundtoptagger_data_rcif/models/hypatia_run4_v2.0.2_Wrealmass_1-50_QCD_ln_kT_cut_None_new_pt_weights_2025-03-07_v100/LundNet_R22_ExtraNode_ln_kT_Cut_None_LRJ_NewData_Primary_e018_0.01689.pt"
 )
 scores_branch_names=(
@@ -108,7 +108,7 @@ for i in "${!checkpoints[@]}"; do
             '/home/tmlinare/Lund_tagging/lundtoptagger_data_rcif/graphs/{sample}/graphs*W_flat_pt*', \
             '/home/tmlinare/Lund_tagging/lundtoptagger_data_rcif/graphs/{sample}/graphs*QCD*' \
         ]" \
-        data.path_to_outdir="/home/tmlinare/Lund_tagging/lundtoptagger_data_rcif/scores/data_{sample}_scores_v2.2.4/" \
+        data.path_to_outdir="/home/tmlinare/Lund_tagging/lundtoptagger_data_rcif/scores/data_{sample}_scores_v2.2.5/" \
         data.output_suffix="_scores" \
         test.path_to_combined_ckpt.null="$ckpt" \
         test.scores_branch_name="$branch"
