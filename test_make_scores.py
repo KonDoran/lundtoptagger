@@ -43,6 +43,7 @@ def main():
     for file_path in paths_to_test_file_root:
         file_path = file_path.format(**filepath_placeholder_vals)
         files_root.extend(glob.glob(file_path))
+    files_root.sort()
     print ("paths_to_test_file_root:", paths_to_test_file_root)
     print ("files:", files_root)
 
@@ -55,6 +56,7 @@ def main():
     for file_path in paths_to_test_file_graphs:
         file_path = file_path.format(**filepath_placeholder_vals)
         files_graphs.extend(glob.glob(file_path))
+    files_graphs.sort()
     print ("paths_to_test_file_graphs:", paths_to_test_file_graphs)
     print ("files:", files_graphs)
 

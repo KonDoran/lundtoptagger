@@ -99,16 +99,16 @@ for i in "${!checkpoints[@]}"; do
     echo "Processing checkpoint: $ckpt"
     echo "Using scores branch name: $branch"
     python test_make_scores.py configs/config_make_scores.yaml  --override \
-        data.sample="v2.1.5_GN2X_m40-inf_pt200-3100_0.25percent" \
+        data.sample="v2.2.0_GN2X/data_part5_2.00percent" \
         data.paths_to_test_file_root="[ \
-            '/home/tmlinare/Lund_tagging/lundtoptagger_data_rcif/graphs/{sample}/*W_flat_pt*.root', \
-            '/home/tmlinare/Lund_tagging/lundtoptagger_data_rcif/graphs/{sample}/*QCD*.root' \
+            '/home/tmlinare/Lund_tagging/lundtoptagger_graphs_lustre/{sample}/*W_flat_pt*.root', \
+            '/home/tmlinare/Lund_tagging/lundtoptagger_graphs_lustre/{sample}/*QCD*.root' \
         ]" \
         data.paths_to_test_file_graphs="[ \
-            '/home/tmlinare/Lund_tagging/lundtoptagger_data_rcif/graphs/{sample}/graphs*W_flat_pt*', \
-            '/home/tmlinare/Lund_tagging/lundtoptagger_data_rcif/graphs/{sample}/graphs*QCD*' \
+            '/home/tmlinare/Lund_tagging/lundtoptagger_graphs_lustre/{sample}/graphs*W_flat_pt*', \
+            '/home/tmlinare/Lund_tagging/lundtoptagger_graphs_lustre/{sample}/graphs*QCD*' \
         ]" \
-        data.path_to_outdir="/home/tmlinare/Lund_tagging/lundtoptagger_data_rcif/scores/data_{sample}_scores_v2.2.5/" \
+        data.path_to_outdir="/home/tmlinare/Lund_tagging/lundtoptagger_scores_lustre/scores_v2.2.6_data_{sample}" \
         data.output_suffix="_scores" \
         test.path_to_combined_ckpt.null="$ckpt" \
         test.scores_branch_name="$branch"
