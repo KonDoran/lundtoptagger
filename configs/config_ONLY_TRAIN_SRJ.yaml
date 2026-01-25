@@ -1,0 +1,49 @@
+# ============================================================
+# Data and output paths
+# ============================================================
+data:
+  path_to_trainfiles: "/home/xzcapcdo/lundtoptagger/preprocess_log/pt_160_eta_3.2_4.5/2026/part_2021_5.00percent/processed_SRJ_train.pt"
+  path_to_save: "/home/xzcapcdo/srj/train/pt_160_eta_3.2_4.5/2026/part_2021_5.00percent/"
+  model_name: "LundNet_dijet_ln_kT_cut_{ln_kT_cut}"
+  adv_model_name: "adversarial"
+  ln_kT_cut: null
+
+  # Used only for reading JSON (harmless to keep)
+  meanstd_json: "/home/xzcapcdo/dijet/pt_160_eta_3.2_4.5_2026_2/data_dijet_part20_5.00percent/slice_meanstd_part20.json"
+
+
+# ============================================================
+# Architecture and training
+# ============================================================
+architecture:
+  batch_size: 4096
+  test_size: 0.1
+  learning_rate: 0.0004
+  save_every_epoch: True
+
+  n_epochs: 50
+  choose_model: LundNet
+
+  # adversarial settings
+  do_combined_training: False
+  num_gaussians: 20
+  n_epochs_adv: 20
+  lambda_parameter: 25
+  loss_parameter: 1
+  loss_weights: [1, 1]
+  n_epochs_common: 200
+
+
+# ============================================================
+# Retraining
+# ============================================================
+retrain:
+  flag: False
+  path_to_ckpt: ""
+
+
+# ============================================================
+# Computing resources
+# ============================================================
+gpu: null
+num_workers: 4

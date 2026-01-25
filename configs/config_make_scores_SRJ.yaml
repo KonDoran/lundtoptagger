@@ -1,0 +1,52 @@
+# ============================================================
+# Data and output paths
+# ============================================================
+data:
+  paths_to_test_file_root: "/home/xzcapcdo/dijet/pt_160_eta_3.2_4.5_2026_2/data_dijet_part21_5.00percent/data_dijet_part21_5.00percent_ln_kT_cut_None.root"
+  paths_to_test_file_graphs: "/home/xzcapcdo/lundtoptagger/preprocess_log/pt_160_eta_3.2_4.5/2026/part_2021_5.00percent/processed_SRJ_test.pt"
+  path_to_outdir: "/home/xzcapcdo/srj/test/pt_160_eta_3.2_4.5/2026/{sample}/"
+
+  output_suffix: "_score_MultiModel_MultiEta"
+  sample: "5.00percent"
+  kT_cut: null
+
+
+# ============================================================
+# Model evaluation settings
+# ============================================================
+test:
+
+  models_to_run:
+
+    # - tag: "LundNet_part0_0.25percent"        # Distinct Root branch names
+    #   arch: "LundNet"               # Model type
+    #   ckpt: "/home/xzcapcdo/srj/train/LundNet_part0_0.25percent/LundNet_dijet_ln_kT_cut_None_e013_0.33969.pt"
+
+    # - tag: "LundNet_part0_0.25percentTEST"      
+    #   arch: "LundNet"
+    #   ckpt: "/home/xzcapcdo/srj/train/LundNet_part0_0.25percentTEST/LundNet_dijet_ln_kT_cut_None_e006_0.34156.pt"
+
+    # - tag: "LundNet_part3_1.00percent"      
+    #   arch: "LundNet"
+    #   ckpt: "/home/xzcapcdo/srj/train/LundNet_part3_1.00percent/LundNet_dijet_ln_kT_cut_None_e017_0.32987.pt"
+
+    - tag: "LundNet_eta_4.5_1.00percent"
+      arch: "LundNet"
+      ckpt: "/home/xzcapcdo/srj/train/LundNet_part3_1.00percent/LundNet_dijet_ln_kT_cut_None_e017_0.32987.pt"
+
+    - tag: "LundNet_eta_3.2_4.5_5.00percent"      
+      arch: "LundNet"
+      ckpt: "/home/xzcapcdo/srj/train/pt_160_eta_3.2_4.5/2026/part_2021_5.00percent/LundNet_dijet_ln_kT_cut_None_e006_0.76799.pt"
+
+    - tag: "LundNet_eta_3.2_4.5_1.00percent"      
+      arch: "LundNet"
+      ckpt: "/home/xzcapcdo/srj/train/pt_160_eta_3.2_4.5/2026/part_01_1.00percent/LundNet_dijet_ln_kT_cut_None_e010_0.79168.pt"
+
+    #- tag: "GINNet_v1"              
+    #  arch: "GINNet"
+    #  ckpt: "/path/to/GINNet_v1.pt"
+
+  # ROOT branch names：generated from TAG
+  scores_branch_name: "fjet_{tag}_score"
+
+  batch_size: 2048

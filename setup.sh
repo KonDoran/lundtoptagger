@@ -13,7 +13,7 @@ elif [[ $(hostname) == compute-gpu-0-*.local ]]; then
     conda activate /share/rcifdata/tmlinare/conda/envs/pytorch_py39_cu126
 
 # setup for UCL HEP GPU server
-elif [ $(hostname) == "gpu02" ]; then
+elif [ $(hostname) == "dias.hpc.phys.ucl.ac.uk" ]; then
     # set up conda
     eval "$('/mnt/storage/tmlinare/installs/miniforge3/bin/conda' 'shell.bash' 'hook' 2> /dev/null)"
     . "/mnt/storage/tmlinare/installs/miniforge3/etc/profile.d/mamba.sh"

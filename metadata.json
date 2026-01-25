@@ -1,0 +1,23 @@
+{
+  "364700": {
+    "XSection_pb": 78420000000.0,
+    "kFactor": 1.0,
+    "genFilterEff": 0.97557,
+    "sumWeights": 450000.0,
+    "nEvents": 450000
+  },
+  "364701": {
+    "XSection_pb": 78420000000.0,
+    "kFactor": 1.0,
+    "genFilterEff": 0.024162,
+    "sumWeights": 440000.0,
+    "nEvents": 440000
+  },
+  "364702": {
+    "XSection_pb": 2432800000.0,
+    "kFactor": 1.0,
+    "genFilterEff": 0.0098225,
+    "sumWeights": 151.1152745216136,
+    "nEvents": 410000
+  }
+}

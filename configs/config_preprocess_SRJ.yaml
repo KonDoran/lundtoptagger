@@ -1,0 +1,38 @@
+# ============================================================
+# Preprocess Config for SRJ (Standardize + Flatten)
+# ============================================================
+
+data:
+  train_graphs:
+    - "/home/xzcapcdo/dijet/pt_160_eta_3.2_4.5_2026_2/data_dijet_part20_5.00percent/graphs_dijet_part20_5.00percent_ln_kT_cut_None_with_pt"
+
+  test_graphs:
+    - "/home/xzcapcdo/dijet/pt_160_eta_3.2_4.5_2026_2/data_dijet_part21_5.00percent/graphs_dijet_part21_5.00percent_ln_kT_cut_None_with_pt"
+
+  out_dir: "/home/xzcapcdo/lundtoptagger/preprocess_log/pt_160_eta_3.2_4.5/2026/part_2021_5.00percent/"
+
+  # mean/std JSON
+  meanstd_json: "/home/xzcapcdo/dijet/pt_160_eta_3.2_4.5_2026_2/data_dijet_part20_5.00percent/slice_meanstd_part20.json"
+
+
+# ============================================================
+# Jet selection
+# ============================================================
+cut_pt_eta_mass: True
+config_signal_path: "./configs/config_signal_SRJ.yaml"
+signal: srj
+
+
+# ============================================================
+# Flattening options (train only)
+# ============================================================
+flatten_pt: True
+flatten_eta: True
+n_bins_pt: 100
+n_bins_eta: 50
+
+
+# ============================================================
+# Compute resources
+# ============================================================
+num_workers: 4

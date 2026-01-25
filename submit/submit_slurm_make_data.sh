@@ -1,112 +1,57 @@
 #!/bin/bash
 
-# to submit this script, do sbatch submit_slurm_make_data.sh
+# Submission command:   sbatch submit_slurm_make_data.sh
 
-# job name
-#SBATCH --job-name=make_data
+#SBATCH --job-name=make_data_dijet_pt_160_eta_3.2_4.5
+#SBATCH -p COMPUTE
+#SBATCH --cpus-per-task=16
 
-# choose the RCIF queue
-#SBATCH -p RCIF
-
-# request one node
+#SBATCH --time=48:00:00
+#SBATCH --mem=256G
 #SBATCH -N1
-# do not share nodes with other running jobs
-# #SBATCH --exclusive
-
-# keep environment variables
-#SBATCH --export=ALL
-
-# request CPUs
 #SBATCH -n4
+# Your config has 34 event_fraction slices
+#SBATCH --array=0-33
 
-# request enough memory - probaby don't need this much
-#SBATCH --mem=35G
-
-# SLURM array: one job per input/id/signal set and event fraction
-# only run up to 10 simultaneously
-# number of elements should be equal to NUM_INPUTS * NUM_EVENT_FRACTIONS
-# last index is included in the array
-#SBATCH --array=0-174%10
-
-# email notifications
-#SBATCH --mail-user=toni.mlinarevic.20@ucl.ac.uk
+#SBATCH --mail-user=zcapcdo@ucl.ac.uk
 #SBATCH --mail-type=ALL
 
-# change log names; %j gives job id, %x gives job name, %a gives array index
-#SBATCH --output=/home/tmlinare/Lund_tagging/lundtoptagger_job_outputs/make_data/slurm-%j.%a.%x.out
-# optional separate error output file
-# #SBATCH --error=/home/tmlinare/Lund_tagging/lundtoptagger_job_outputs/make_data/slurm-%j.%a.%x.err
+#SBATCH --output=/home/xzcapcdo/lundtoptagger/logs/slurm-%j.%a.%x.out
 
-# speedup trick
-# export OMP_NUM_THREADS=1
 
-input_paths=( \
-    "/share/lustre/tmlinare/Lund_tagging/jetmdatamc_output/FTAG1_2025-06-03/user.jecifuen.mc20_13TeV.364703.e7142_s3681_r13144_p6453.FTAG1_TV3_ANALYSIS.root/*.root" \
-    "/share/lustre/tmlinare/Lund_tagging/jetmdatamc_output/FTAG1_2025-06-03/user.jecifuen.mc20_13TeV.364704.e7142_s3681_r13144_p6453.FTAG1_TV3_ANALYSIS.root/*.root" \
-    "/share/lustre/tmlinare/Lund_tagging/jetmdatamc_output/FTAG1_2025-06-03/user.jecifuen.mc20_13TeV.364705.e7142_s3681_r13144_p6453.FTAG1_TV3_ANALYSIS.root/*.root" \
-    "/share/lustre/tmlinare/Lund_tagging/jetmdatamc_output/FTAG1_2025-06-03/user.jecifuen.mc20_13TeV.364706.e7142_s3681_r13144_p6453.FTAG1_TV3_ANALYSIS.root/*.root" \
-    "/share/lustre/tmlinare/Lund_tagging/jetmdatamc_output/FTAG1_2025-06-03/user.jecifuen.mc20_13TeV.364707.e7142_s3681_r13144_p6453.FTAG1_TV3_ANALYSIS.root/*.root" \
-    "/share/lustre/tmlinare/Lund_tagging/jetmdatamc_output/FTAG1_2025-06-03/user.jecifuen.mc20_13TeV.426345.e6880_s3681_r13144_p5981.FTAG1_TV3_ANALYSIS.root/*.root" \
-    "/share/lustre/tmlinare/Lund_tagging/jetmdatamc_output/FTAG1_2025-06-03/user.jecifuen.mc20_13TeV.801859.e8482_s3681_r13144_p6781.FTAG1_TV3_ANALYSIS.root/*.root" \
-    # "/share/lustre/tmlinare/Lund_tagging/jetmdatamc_output/JETM2_old/mc20_13TeV.801859.Py8EG_A14NNPDF23LO_WprimeWZ_flatpT.deriv.DAOD_JETM2.e8482_s3681_r13145_p5548_files_3-4.root" \
-)
-ids=( \
-    QCD_364703 \
-    QCD_364704 \
-    QCD_364705 \
-    QCD_364706 \
-    QCD_364707 \
-    Zprime_tt_426345 \
-    W_flat_pt_801859 \
-)
-signals=( \
-    all \
-    all \
-    all \
-    all \
-    all \
-    top \
-    W \
-)
-
-NUM_INPUTS=7
-NUM_EVENT_FRACTIONS=25
-
-cd ~/Lund_tagging/lundtoptagger
-echo "Moved dir, now in:"
-pwd
-
-echo "Hostname:"
+# ------------------------------------------
+# Environment and Paths
+# ------------------------------------------
+cd /home/xzcapcdo/lundtoptagger
+echo "Now in $(pwd)"
 hostname
 
-echo "Activating environment"
-source /share/apps/anaconda/3-2022.05/etc/profile.d/conda.sh
-conda activate /share/rcifdata/tmlinare/conda/envs/pytorch_py39_cu126
-echo $CONDA_DEFAULT_ENV
+echo "Activating environment..."
+source /share/data1/xucaphue/setup.sh
+conda activate /share/data1/xucaphue/envs/pytorch_py39_cu126
+echo "Conda env: $CONDA_DEFAULT_ENV"
 
-echo "CUDA_VISIBLE_DEVICES:"
-echo $CUDA_VISIBLE_DEVICES
 
-# Compute indices for event fraction and input set
-event_fraction_idx=$(( SLURM_ARRAY_TASK_ID / NUM_INPUTS ))
-input_set_idx=$(( SLURM_ARRAY_TASK_ID % NUM_INPUTS ))
+# ------------------------------------------
+# Parameters
+# ------------------------------------------
+main_config="configs/config_make_data_SRJ.yaml"
+signal_config="configs/config_signal_SRJ.yaml"
 
-path_to_rootfiles="${input_paths[$input_set_idx]}"
-id="${ids[$input_set_idx]}"
-signal="${signals[$input_set_idx]}"
+event_fraction_idx=${SLURM_ARRAY_TASK_ID}
 
-echo ""
-echo "path_to_rootfiles: $path_to_rootfiles"
-echo "id: $id"
-echo "signal: $signal"
-echo "event_fraction_idx: $event_fraction_idx"
+echo "Using main config:   $main_config"
+echo "Using signal config: $signal_config"
+echo "event_fraction_idx:  $event_fraction_idx"
 
-echo "Running training script..."
-echo ""
-python Make_data.py configs/config_make_data.yaml --override \
-    out_dir="/share/lustre/tmlinare/Lund_tagging/graphs/v2.2.0_GN2X/data{frac}" \
-    path_to_rootfiles="$path_to_rootfiles" \
-    id="$id" \
-    signal="$signal" \
-    signal_name_in_weight=True \
+
+# ------------------------------------------
+# Run MakeData
+# ------------------------------------------
+python Make_data_SRJ.py "$main_config" --override \
+    signal_config_file="$signal_config" \
+    id="dijet" \
+    signal="srj" \
     event_fraction_idx="$event_fraction_idx"
+
+echo "Job done."

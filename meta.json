@@ -1,0 +1,123 @@
+{
+  "by_dsid": {
+    "364700": [
+      {
+        "cross_section_pb": 78050000000.0,
+        "dsid": 364700,
+        "etag": "e7142",
+        "genFiltEff": 0.9753257,
+        "kfactor": 1.0
+      }
+    ],
+    "364701": [
+      {
+        "cross_section_pb": 78050000000.0,
+        "dsid": 364701,
+        "etag": "e7142",
+        "genFiltEff": 0.02442497,
+        "kfactor": 1.0
+      }
+    ],
+    "364702": [
+      {
+        "cross_section_pb": 2433000000.0,
+        "dsid": 364702,
+        "etag": "e7142",
+        "genFiltEff": 0.009863128,
+        "kfactor": 1.0
+      }
+    ],
+    "364703": [
+      {
+        "cross_section_pb": 26450000.0,
+        "dsid": 364703,
+        "etag": "e7142",
+        "genFiltEff": 0.01165833,
+        "kfactor": 1.0
+      }
+    ],
+    "364704": [
+      {
+        "cross_section_pb": 254610.0,
+        "dsid": 364704,
+        "etag": "e7142",
+        "genFiltEff": 0.01336553,
+        "kfactor": 1.0
+      }
+    ],
+    "364705": [
+      {
+        "cross_section_pb": 4553.200000000001,
+        "dsid": 364705,
+        "etag": "e7142",
+        "genFiltEff": 0.01452648,
+        "kfactor": 1.0
+      }
+    ],
+    "364706": [
+      {
+        "cross_section_pb": 257.53999999999996,
+        "dsid": 364706,
+        "etag": "e7142",
+        "genFiltEff": 0.0094734,
+        "kfactor": 1.0
+      }
+    ],
+    "364707": [
+      {
+        "cross_section_pb": 16.215,
+        "dsid": 364707,
+        "etag": "e7142",
+        "genFiltEff": 0.011099,
+        "kfactor": 1.0
+      }
+    ],
+    "364708": [
+      {
+        "cross_section_pb": 0.62506,
+        "dsid": 364708,
+        "etag": "e7142",
+        "genFiltEff": 0.010156,
+        "kfactor": 1.0
+      }
+    ],
+    "364709": [
+      {
+        "cross_section_pb": 0.019639,
+        "dsid": 364709,
+        "etag": "e7142",
+        "genFiltEff": 0.012057,
+        "kfactor": 1.0
+      }
+    ],
+    "364710": [
+      {
+        "cross_section_pb": 0.0011962000000000001,
+        "dsid": 364710,
+        "etag": "e7142",
+        "genFiltEff": 0.005894,
+        "kfactor": 1.0
+      }
+    ],
+    "364711": [
+      {
+        "cross_section_pb": 4.2263e-05,
+        "dsid": 364711,
+        "etag": "e7142",
+        "genFiltEff": 0.0026734,
+        "kfactor": 1.0
+      }
+    ],
+    "364712": [
+      {
+        "cross_section_pb": 1.0367e-06,
+        "dsid": 364712,
+        "etag": "e7142",
+        "genFiltEff": 0.00042898,
+        "kfactor": 1.0
+      }
+    ]
+  },
+  "campaign": "mc16",
+  "source_file": "PMGxsecDB_mc16.txt"
+}

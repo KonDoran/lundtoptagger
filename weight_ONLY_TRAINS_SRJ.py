@@ -2,6 +2,7 @@ import argparse
 import csv
 from datetime import datetime
 import os
+import json
 
 import numpy as np
 import torch
@@ -34,6 +35,8 @@ def main():
 
     config_file = args.config
     config = load_yaml(config_file)
+    path_to_save = config['data']['path_to_save']
+    os.makedirs(path_to_save, exist_ok=True)
     ln_kT_cut = args.ln_kT_cut if args.ln_kT_cut is not None else config['data']['ln_kT_cut']
     do_combined_training = (
         True if args.do_combined_training in ["true", "yes", "1"] else
@@ -53,115 +56,20 @@ def main():
         print("Loading file", file_path)
         dataset += torch.load(file_path, weights_only=False) # weights_only=False added so that it works with PyTorch 2.6; it used to be the default
 
-    for d in dataset:
-        if hasattr(d, "fjet_weight_pt_W"):
-            del d.fjet_weight_pt_W
-        if hasattr(d, "fjet_weight_pt_top"):
-            del d.fjet_weight_pt_top
-
-    # apply jet mass and pT cuts
-    if config['cut_pt_mass']:
-        config_signal = load_yaml(config['config_signal_path'])[config['signal']]
-        pt_range = config_signal['pt_range']
-        mass_range = config_signal['mass_range']
-        print("Filtering jets with pT in range", pt_range, "and mass in range", mass_range)
-        dataset = [jet_graph for jet_graph in dataset
-                   if  pt_range[0]   < jet_graph.pt   < pt_range[1]
-                   and mass_range[0] < jet_graph.mass < mass_range[1]]
-
-    # check the number of signal and background jets
-    labels = np.array([jet_graph.y for jet_graph in dataset])
-    num_signal = (labels==1).sum()
-    num_background = (labels==0).sum()
-    print("")
-    print("Signal count:", num_signal)
-    print("Background count:", num_background)
-
-    # optionally flatten the mass and pt distributions and save plots of the distributions
-    masses = np.array([jet_graph.mass for jet_graph in dataset])
-    pts = np.array([jet_graph.pt for jet_graph in dataset])
-
-    flatten_mass = config['flatten_mass']
-    flatten_pt = config['flatten_pt']
-    if flatten_mass and flatten_pt:
-        weights_bkg = assign_2d_flat_weights_kde(masses[labels==0], pts[labels==0], bw_method='scott')
-        weights_sig = assign_2d_flat_weights_kde(masses[labels==1], pts[labels==1], bw_method='scott')
-    elif flatten_mass or flatten_pt:
-        iterations  = config['num_iters']
-        arrays_to_flatten_bkg = []
-        arrays_to_flatten_sig = []
-        n_bins = []
-        if flatten_mass:
-            arrays_to_flatten_bkg.append(masses[labels==0])
-            arrays_to_flatten_sig.append(masses[labels==1])
-            n_bins.append(config['n_bins_mass'])
-        if flatten_pt:
-            arrays_to_flatten_bkg.append(pts[labels==0])
-            arrays_to_flatten_sig.append(pts[labels==1])
-            n_bins.append(config['n_bins_pt'])
-        weights_bkg = assign_flat_weights(*arrays_to_flatten_bkg, n_bins=n_bins, iterations=iterations)
-        weights_sig = assign_flat_weights(*arrays_to_flatten_sig, n_bins=n_bins, iterations=iterations)
-    else:
-        weights_attr_name = 'fjet_weight_pt' if hasattr(dataset[0], 'fjet_weight_pt') else f'fjet_weight_pt_{config["signal"]}'
-        weights_bkg = np.array([jet_graph[weights_attr_name] for jet_graph in dataset if jet_graph.y == 0], dtype=np.float64)
-        weights_sig = np.array([jet_graph[weights_attr_name] for jet_graph in dataset if jet_graph.y == 1], dtype=np.float64)
-
-    path_to_save = config['data']['path_to_save'].format(ln_kT_cut=ln_kT_cut)
-    os.makedirs(path_to_save, exist_ok=True)
-    print("\nResults will be saved to", path_to_save)
-
-    for var_array, var_name, var_bins in zip([masses, pts], ['Mass', 'pT'], ['n_bins_mass', 'n_bins_pt']):
-        hist_args = dict(
-            bins = config[var_bins],
-            density = True,
-            fmt = "."
-        )
-        hist_with_errors(var_array[labels==0], label='Background', weights=weights_bkg, **hist_args, capsize=2)
-        hist_with_errors(var_array[labels==1], label='Signal',     weights=weights_sig, **hist_args)
-        plt.xlabel(f"LRJ {var_name} [GeV]")
-        plt.ylabel('density')
-        if var_name=="Mass" and not flatten_mass or var_name=="pT" and not flatten_pt:
-            plt.ylim(bottom=0)
-        plt.legend()
-        plt.savefig(os.path.join(path_to_save, f"{var_name}_distribution.png"))
-        plt.close()
-    
-    for truth_label, label_name, weights_array in zip([0, 1], ['background', 'signal'], [weights_bkg, weights_sig]):
-        hist_arrays = [masses[labels==truth_label], pts[labels==truth_label]]
-        hist_args = dict(
-            bins=(config['n_bins_mass'], config['n_bins_pt']),
-            weights=weights_array,
-            density=True
-        )
-        bin_counts_2d_hist = np.histogram2d(*hist_arrays, **hist_args)[0]
-        min_bin_count = bin_counts_2d_hist[bin_counts_2d_hist > 0].min()
-        print(f"Minimum bin count for {label_name}:", min_bin_count)
-
-        plt.hist2d(*hist_arrays, **hist_args, cmin=min_bin_count)
-        plt.colorbar(label='density')
-        plt.xlabel('LRJ Mass [GeV]')
-        plt.ylabel('LRJ pT [GeV]')
-        plt.savefig(os.path.join(path_to_save, f"Mass_pT_distribution_{label_name}.png"))
-        plt.close()
-
-    print("Mass and pT plots saved")
-
     # rescale the weights so that the total weight of signal jets is equal to the total weight of background jets
-    weights_signal_total = weights_sig.sum()
-    weights_background_total = weights_bkg.sum()
-    print("")
-    print("Signal total weight:", weights_signal_total)
-    print("Background total weight:", weights_background_total)
-    scale_factor = weights_signal_total / weights_background_total
+
+    dataset_sig = [g for g in dataset if g.y == 1]
+    dataset_bkg = [g for g in dataset if g.y == 0]
+
+    weights_sig_total = sum(g.weights for g in dataset_sig)
+    weights_bkg_total = sum(g.weights for g in dataset_bkg)
+
+    scale_factor = weights_sig_total / weights_bkg_total
     print("Scale factor:", scale_factor)
 
-    dataset_sig = [jet_graph for jet_graph in dataset if jet_graph.y == 1]
-    dataset_bkg = [jet_graph for jet_graph in dataset if jet_graph.y == 0]
-
-    for jet_graph, weight in zip(dataset_sig, weights_sig):
-        jet_graph.weights = weight
-    for jet_graph, weight in zip(dataset_bkg, weights_bkg):
-        jet_graph.weights = weight*scale_factor
+    # multiply scale factor only to background
+    for g in dataset_bkg:
+        g.weights *= scale_factor
 
     ## define architecture
     batch_size = config['architecture']['batch_size']
@@ -199,8 +107,6 @@ def main():
         model = PNANet()
     if choose_model == "LundNet_plus_GN2X":
         model = LundNet_plus_GN2X()
-    if choose_model == "LundNet_plus_GN3X":
-        model = LundNet_plus_GN3X()
 
     path_to_ckpt = config['retrain']['path_to_ckpt']
 

@@ -1,27 +1,40 @@
 data:
   # The ROOT and graphs files should be the output of Make_data.py
-  paths_to_test_file_root: "/data/ravinascos/Lund_Plane_2024_graphs/New_Samples/{sample}/*.root"  # can also be a list of glob patterns
-  paths_to_test_file_graphs: "graphs/graphs*"                                                     # can also be a list of glob patterns
-  path_to_outdir: "/data/ravinascos/LundNet/R_22_Top/{sample}/"
+  paths_to_test_file_root: # can also be a list of glob patterns
+  - "/home/xzcapcdo/lundtoptagger/data/part_0_0.25/part0_0.25percent/data_Top_flat_pt_801661_cfg167_part0_0.25percent_ln_kT_cut_None_score_LundNetGN3X_0.05558.root"
+  - "/home/xzcapcdo/lundtoptagger/data/part_0_0.25/part0_0.25percent/data_QCD_364707_part0_0.25percent_ln_kT_cut_None_score_LundNetGN3X_0.05558.root"
+  - "/home/xzcapcdo/lundtoptagger/data/part_0_0.25/part0_0.25percent/data_QCD_364706_part0_0.25percent_ln_kT_cut_None_score_LundNetGN3X_0.05558.root"
+  - "/home/xzcapcdo/lundtoptagger/data/part_0_0.25/part0_0.25percent/data_QCD_364705_part0_0.25percent_ln_kT_cut_None_score_LundNetGN3X_0.05558.root"
+  - "/home/xzcapcdo/lundtoptagger/data/part_0_0.25/part0_0.25percent/data_QCD_364704_part0_0.25percent_ln_kT_cut_None_score_LundNetGN3X_0.05558.root"
+  - "/home/xzcapcdo/lundtoptagger/data/part_0_0.25/part0_0.25percent/data_QCD_364703_part0_0.25percent_ln_kT_cut_None_score_LundNetGN3X_0.05558.root"
+  
+  paths_to_test_file_graphs: # can also be a list of glob patterns
+  - "/share/data1/yzhu/gn3x/graph/data_part0_0.25percent/graphs_Top_flat_pt_801661_cfg167_part0_0.25percent_ln_kT_cut_None_with_pt"    
+  - "/share/data1/yzhu/gn3x/graph/data_part0_0.25percent/graphs_QCD_364707_part0_0.25percent_ln_kT_cut_None_with_pt"
+  - "/share/data1/yzhu/gn3x/graph/data_part0_0.25percent/graphs_QCD_364706_part0_0.25percent_ln_kT_cut_None_with_pt"
+  - "/share/data1/yzhu/gn3x/graph/data_part0_0.25percent/graphs_QCD_364705_part0_0.25percent_ln_kT_cut_None_with_pt"
+  - "/share/data1/yzhu/gn3x/graph/data_part0_0.25percent/graphs_QCD_364704_part0_0.25percent_ln_kT_cut_None_with_pt"
+  -  "/share/data1/yzhu/gn3x/graph/data_part0_0.25percent/graphs_QCD_364703_part0_0.25percent_ln_kT_cut_None_with_pt"
+  path_to_outdir: "/home/xzcapcdo/lundtoptagger/data/part_0_0.25/{sample}/"
 
   # the name of the output file will be the same as the name of the input ROOT file, with this suffix added (but in a different directory)
   # TODO: get the epoch automatically from the checkpoint file name
-  output_suffix: "_score_LundNet_R22_ExtraNode_e020"
+  output_suffix: "_score_LundNet_0.09073"
 
   # If path_to_test_file, path_to_outdir or output_name contain the {sample} or {kT_cut} placeholders, they will be replaced by the values below.
-  sample: "TEST_05qcd_1z" # choices: TEST_05qcd_1z, Other_MC/Herwig_d, Other_MC/Sherpa_Cluster, Other_MC/Sherpa_Lund
+  sample: "part0_0.25percent" # choices: TEST_05qcd_1z, Other_MC/Herwig_d, Other_MC/Sherpa_Cluster, Other_MC/Sherpa_Lund
   kT_cut: null            # actually a cut in ln(kT); values: null, -0.5, 0.0, 0.5, 1.0, 2.0, 2.8
 
 test:
   path_to_combined_ckpt:  # checkpoints for different kT cuts
-    null: "/home/ravinascos/LundNet/Jad_git/lundtoptagger/Models/LundNet_R22_ExtraNode_No_ln_kT_Cut_LRJ_NewData_Primarye020_0.09045.pt"
-    -0.5: "/home/ravinascos/LundNet/Jad_git/lundtoptagger/Models/LundNet_R22_ExtraNode_ln_kT_Cut_-0.5_LRJ_NewData_Primarye020_0.10169.pt"
-    0.0:  "/home/ravinascos/LundNet/Jad_git/lundtoptagger/Models/LundNet_R22_ExtraNode_ln_kT_Cut_0.0_LRJ_NewData_Primarye020_0.10598.pt"
-    0.5:  "/home/ravinascos/LundNet/Jad_git/lundtoptagger/Models/LundNet_R22_ExtraNode_ln_kT_Cut_0.5_LRJ_NewData_Primarye020_0.11077.pt"
-    1.0:  "/home/ravinascos/LundNet/Jad_git/lundtoptagger/Models/LundNet_R22_ExtraNode_ln_kT_Cut_1.0_LRJ_NewData_Primarye020_0.12059.pt"
-    2.0:  "/home/ravinascos/LundNet/Jad_git/lundtoptagger/Models/LundNet_R22_ExtraNode_ln_kT_Cut_2.0_LRJ_NewData_Primarye020_0.14809.pt"
-    2.8:  "/home/ravinascos/LundNet/Jad_git/lundtoptagger/Models/LundNet_R22_ExtraNode_ln_kT_Cut_2.8_LRJ_NewData_Primarye020_0.17321.pt"
+    null: "/home/xzcapcdo/lundtoptagger/Models/LundNetBase/QCD_part_0_0.25_ln_kT_cut_None_with_pt/LundNet_part0_0.25percent_ln_kT_cut_None_with_pt_e035_0.09073.pt"
+    #-0.5: "/home/ravinascos/LundNet/Jad_git/lundtoptagger/Models/LundNet_R22_ExtraNode_ln_kT_Cut_-0.5_LRJ_NewData_Primarye020_0.10169.pt"
+    #0.0:  "/home/ravinascos/LundNet/Jad_git/lundtoptagger/Models/LundNet_R22_ExtraNode_ln_kT_Cut_0.0_LRJ_NewData_Primarye020_0.10598.pt"
+    #0.5:  "/home/ravinascos/LundNet/Jad_git/lundtoptagger/Models/LundNet_R22_ExtraNode_ln_kT_Cut_0.5_LRJ_NewData_Primarye020_0.11077.pt"
+    #1.0:  "/home/ravinascos/LundNet/Jad_git/lundtoptagger/Models/LundNet_R22_ExtraNode_ln_kT_Cut_1.0_LRJ_NewData_Primarye020_0.12059.pt"
+    #2.0:  "/home/ravinascos/LundNet/Jad_git/lundtoptagger/Models/LundNet_R22_ExtraNode_ln_kT_Cut_2.0_LRJ_NewData_Primarye020_0.14809.pt"
+    #2.8:  "/home/ravinascos/LundNet/Jad_git/lundtoptagger/Models/LundNet_R22_ExtraNode_ln_kT_Cut_2.8_LRJ_NewData_Primarye020_0.17321.pt"
 
-  choose_model: LundNet                   # choices: LundNet, LundNet_plus_GN2X, GATNet, GINNet, EdgeGinNet, PNANet
+  choose_model: LundNet                 # choices: LundNet, LundNet_plus_GN2X, GATNet, GINNet, EdgeGinNet, PNANet
   scores_branch_name: fjet_{model}_score  # {model} will be replaced by the value of choose_model, optional
   batch_size: 2048
