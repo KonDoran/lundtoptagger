@@ -1,4 +1,6 @@
 import math
+import sys
+import os
 
 import numpy as np
 import torch
@@ -8,6 +10,29 @@ from torch.utils.data import Dataset
 from torch_geometric.nn import global_mean_pool, EdgeConv, GATConv, GINConv, PNAConv
 from torch.autograd import Function
 from torch.distributions import Categorical
+
+# Import quantum layers
+QUANTUM_AVAILABLE = False
+QUANTUM_IMPORT_ERROR = None
+
+# Add the current directory to path to ensure quantum_layers can be found
+_current_dir = os.path.dirname(os.path.abspath(__file__))
+if _current_dir not in sys.path:
+    sys.path.insert(0, _current_dir)
+
+try:
+    from quantum_layers import QuantumEdgeConv
+    QUANTUM_AVAILABLE = True
+except ImportError as e:
+    QUANTUM_IMPORT_ERROR = str(e)
+    try:
+        # Try relative import
+        from .quantum_layers import QuantumEdgeConv
+        QUANTUM_AVAILABLE = True
+    except ImportError as e2:
+        QUANTUM_IMPORT_ERROR = f"Absolute import failed: {e}. Relative import failed: {e2}"
+        print(f"Warning: quantum_layers module not found. QLundNet will not be available.")
+        print(f"Import error details: {QUANTUM_IMPORT_ERROR}")
 
 class Net(torch.nn.Module):
     def __init__(self):
@@ -126,6 +151,113 @@ class LundNet(torch.nn.Module):
         x = self.lin(x)
         #print(x.shape)
         return F.sigmoid(x)
+
+class QLundNet(torch.nn.Module):
+    """
+    Quantum version of LundNet using quantum circuits for edge convolutions.
+    
+    This model replaces the classical EdgeConv layers with QuantumEdgeConv layers,
+    which process edge features through parameterized quantum circuits.    
+    Architecture:
+        6 QuantumEdgeConv layers (mirroring LundNet structure)
+        Same classical post-processing as LundNet
+        
+    Note:
+        - Requires PennyLane: pip install pennylane
+    """
+    
+    def __init__(self, n_qubits=4, n_quantum_layers=2):
+        """
+        Args:
+            n_qubits: Number of qubits per quantum circuit (reduced to 4 for speed)
+            n_quantum_layers: Number of layers in each quantum circuit (1-3 recommended)
+        """
+        super(QLundNet, self).__init__()
+        
+        if not QUANTUM_AVAILABLE:
+            error_msg = (
+                "QuantumEdgeConv not available. Please ensure quantum_layers.py is in the same directory "
+                "and PennyLane is installed: pip install pennylane\n"
+                f"Import error details: {QUANTUM_IMPORT_ERROR}"
+            )
+            raise ImportError(error_msg)
+        
+        self.n_qubits = n_qubits
+        self.n_quantum_layers = n_quantum_layers
+        
+        # Quantum EdgeConv layers (replacing classical EdgeConv)
+        # Note: in_channels represents the node feature dimension (3), not EdgeConv input (6)
+        # EdgeConv internally concatenates [x_i, x_j] so input to MLP is 2*in_channels
+        
+        # HYBRID APPROACH: Use Quantum layer only for first layer to improve performance
+        self.conv1 = QuantumEdgeConv(
+            in_channels=3, out_channels=32, 
+            n_qubits=n_qubits, n_layers=n_quantum_layers, aggr='add'
+        )
+        
+        # Use classical EdgeConv for remaining layers for speed
+        self.conv2 = EdgeConv(nn.Sequential(nn.Linear(64, 32), nn.BatchNorm1d(num_features=32), nn.ReLU(),
+                                            nn.Linear(32, 32), nn.BatchNorm1d(num_features=32), nn.ReLU()),aggr='add')
+        self.conv3 = EdgeConv(nn.Sequential(nn.Linear(64,64), nn.BatchNorm1d(num_features=64), nn.ReLU(),
+                                            nn.Linear(64, 64), nn.BatchNorm1d(num_features=64), nn.ReLU()),aggr='add')
+        self.conv4 = EdgeConv(nn.Sequential(nn.Linear(128, 64), nn.BatchNorm1d(num_features=64), nn.ReLU(),
+                                            nn.Linear(64, 64), nn.BatchNorm1d(num_features=64), nn.ReLU()),aggr='add')
+        self.conv5 = EdgeConv(nn.Sequential(nn.Linear(128, 128), nn.BatchNorm1d(num_features=128), nn.ReLU(),
+                                            nn.Linear(128, 128), nn.BatchNorm1d(num_features=128), nn.ReLU()),aggr='add')
+        self.conv6 = EdgeConv(nn.Sequential(nn.Linear(256, 128), nn.BatchNorm1d(num_features=128), nn.ReLU(),
+                                            nn.Linear(128, 128), nn.BatchNorm1d(num_features=128), nn.ReLU()),aggr='add')
+        
+        # Same classical layers as LundNet
+        self.seq1 = nn.Sequential(
+            nn.Linear(448, 384),  # 32+32+64+64+128+128 = 448
+            nn.BatchNorm1d(num_features=384),
+            nn.ReLU()
+        )
+        self.seq2 = nn.Sequential(
+            nn.Linear(385, 256),  # 384 + 1 (Ntrk)
+            nn.ReLU()
+        )
+        self.lin = nn.Linear(256, 1)
+    
+    def forward(self, data):
+        """
+        Forward pass through quantum GNN.
+        
+        Args:
+            data: PyTorch Geometric Data object with:
+                - x: Node features [num_nodes, 6]
+                - edge_index: Graph connectivity [2, num_edges]
+                - batch: Batch assignment [num_nodes]
+                - Ntrk: Number of tracks [batch_size]
+        
+        Returns:
+            Predictions [batch_size, 1] with sigmoid activation
+        """
+        x, edge_index, batch = data.x, data.edge_index, data.batch
+        Ntrk = data.Ntrk
+        Ntrk = torch.unsqueeze(Ntrk, 1)
+        
+        # Apply quantum convolution layers
+        x1 = self.conv1(x, edge_index)
+        x2 = self.conv2(x1, edge_index)
+        x3 = self.conv3(x2, edge_index)
+        x4 = self.conv4(x3, edge_index)
+        x5 = self.conv5(x4, edge_index)
+        x6 = self.conv6(x5, edge_index)
+        
+        # Concatenate layer outputs (skip connections)
+        x = torch.cat((x1, x2, x3, x4, x5, x6), dim=1)
+        
+        # Classical post-processing (same as LundNet)
+        x = self.seq1(x)
+        x = global_mean_pool(x, batch)
+        x = torch.cat((x, Ntrk), dim=1)
+        x = self.seq2(x)
+        x = F.dropout(x, p=0.1, training=self.training)
+        x = self.lin(x)
+        
+        return torch.sigmoid(x)
+
 
 class LundNet_plus_GN2X(torch.nn.Module):
     def __init__(self):
