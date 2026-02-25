@@ -1,8 +1,7 @@
 """
 Quantum Circuit Layers for Graph Neural Networks
 
-This module contains quantum circuit implementations adapted for use in PyTorch GNNs.
-Extracted and generalized from the QGNN water molecule prediction project.
+This module contains quantum circuit implementations adapted for use in PyTorch implementation of LundNet.
 """
 
 try:
@@ -22,9 +21,7 @@ import numpy as np
 def encode_input_positions(inputs, qubits, n_features_per_qubit=2):
     """
     Encode input features into quantum states using rotation gates.
-    
-    This is the quantum analog of classical feature embedding. Each qubit receives
-    a subset of input features encoded as rotation angles.
+    Each qubit receives a subset of input features encoded as rotation angles.
     
     Args:
         inputs: Input features tensor of shape (n_qubits * n_features_per_qubit,) or (batch_size, n_qubits * n_features_per_qubit)
@@ -32,8 +29,7 @@ def encode_input_positions(inputs, qubits, n_features_per_qubit=2):
         n_features_per_qubit: Number of features to encode per qubit (default: 2)
     
     Note:
-        Features are encoded using RX and RY gates. For more features per qubit,
-        additional rotation gates (RZ) can be added.
+        Features are encoded using RX and RY gates.
     """
     # Check if inputs is a batch (2D) or single sample (1D)
     is_batch = len(inputs.shape) > 1
@@ -60,20 +56,13 @@ def apply_interaction_gates(interactions, qubits, layer_idx=0):
     """
     Apply entangling gates between qubits based on interaction strengths.
     
-    This creates quantum entanglement between qubits, analogous to message
-    passing in classical GNNs. The interaction strength can be based on
-    distances, edge weights, or other graph properties.
-    
     Args:
         interactions: Interaction strengths (can be scalar or array)
         qubits: List of qubit indices
         layer_idx: Current layer index (for gate variation)
     
     Note:
-        Uses IsingXX gates for entanglement. Other options include:
-        - IsingYY, IsingZZ for different coupling types
-        - CNOT for discrete entanglement
-        - CRX, CRY, CRZ for parameterized entanglement
+        Uses IsingXX gates for entanglement.
     """
     n_qubits = len(qubits)
     
@@ -95,9 +84,6 @@ def apply_interaction_gates(interactions, qubits, layer_idx=0):
 def apply_param_gates(param_offset, quantum_params, qubits):
     """
     Apply parameterized rotation gates (learnable parameters).
-    
-    These are the trainable quantum parameters, analogous to weights in
-    classical neural networks. They are optimized via backpropagation.
     
     Args:
         param_offset: Starting index in quantum_params for this layer
@@ -124,7 +110,6 @@ def measure_quantum_state(qubits):
     """
     Measure quantum state and return expectation values.
     
-    This extracts classical information from the quantum state.
     Uses Pauli-Z measurements which return values in [-1, 1].
     
     Args:
@@ -157,16 +142,14 @@ class QuantumEdgeConv(nn.Module):
     quantum gates, and measured to produce classical output features.
     
     Architecture:
-        Classical Preprocessing → Quantum Circuit → Classical Postprocessing
+        Classical Preprocessing -> Quantum Circuit -> Classical Postprocessing
         
-    The quantum circuit acts as a highly expressive feature transformation
-    with exponentially large Hilbert space (2^n_qubits states).
     
     Args:
         in_channels: Input feature dimension per node
         out_channels: Output feature dimension per node
-        n_qubits: Number of qubits in quantum circuit (4-8 recommended)
-        n_layers: Number of quantum circuit layers (1-3 recommended)
+        n_qubits: Number of qubits in quantum circuit
+        n_layers: Number of quantum circuit layers
         aggr: Aggregation method for edge-to-node ('add', 'mean', 'max')
     
     Attributes:
@@ -236,7 +219,7 @@ class QuantumEdgeConv(nn.Module):
         Circuit structure:
         1. Input encoding: Map classical features to quantum states
         2. Parameterized layers: Apply learnable transformations
-           - Interaction gates (entanglement)
+           - Interaction gates 
            - Parameterized rotations (trainable)
         3. Measurement: Extract classical features
         
@@ -267,14 +250,14 @@ class QuantumEdgeConv(nn.Module):
     
     def forward(self, x, edge_index):
         """
-        Forward pass compatible with PyTorch Geometric.
+        Forward pass to work with PyTorch Geometric.
         
         Processing pipeline:
         1. Construct edge features [x_i || x_j] for each edge
         2. Preprocess: Classical MLP to quantum input dimension
         3. Quantum: Process through quantum circuit
         4. Postprocess: Classical MLP to output dimension
-        5. Aggregate: Edge features → node features
+        5. Aggregate: Edge features -> node features
         
         Args:
             x: Node features [num_nodes, in_channels]
@@ -331,58 +314,3 @@ class QuantumEdgeConv(nn.Module):
             node_output = scatter(edge_output, row, dim=0, dim_size=num_nodes, reduce='max')
         
         return node_output
-
-
-# ===== CONVENIENCE FUNCTION FOR TESTING =====
-
-def test_quantum_layer():
-    """
-    Test function to verify QuantumEdgeConv functionality.
-    
-    Creates a small random graph and processes it through the quantum layer.
-    Useful for debugging and understanding layer behavior.
-    """
-    print("Testing QuantumEdgeConv layer...")
-    
-    # Create dummy data
-    num_nodes = 5
-    num_edges = 8
-    in_channels = 3
-    out_channels = 16
-    n_qubits = 4
-    
-    # Random node features
-    x = torch.randn(num_nodes, in_channels)
-    
-    # Random edge connectivity
-    edge_index = torch.randint(0, num_nodes, (2, num_edges))
-    
-    # Create quantum layer
-    layer = QuantumEdgeConv(
-        in_channels=in_channels,
-        out_channels=out_channels,
-        n_qubits=n_qubits,
-        n_layers=2,
-        aggr='add'
-    )
-    
-    print(f"Input shape: {x.shape}")
-    print(f"Edge index shape: {edge_index.shape}")
-    print(f"Quantum parameters: {layer.quantum_params.shape[0]}")
-    
-    # Forward pass
-    output = layer(x, edge_index)
-    
-    print(f"Output shape: {output.shape}")
-    print(f"Expected: [{num_nodes}, {out_channels}]")
-    
-    # Check gradient flow
-    loss = output.sum()
-    loss.backward()
-    
-    print(f"Gradient on quantum params: {layer.quantum_params.grad is not None}")
-    print("Test passed!")
-
-
-if __name__ == "__main__":
-    test_quantum_layer()
