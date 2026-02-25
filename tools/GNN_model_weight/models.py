@@ -155,12 +155,6 @@ class LundNet(torch.nn.Module):
 class QLundNet(torch.nn.Module):
     """
     Quantum version of LundNet using quantum circuits for edge convolutions.
-    
-    This model replaces the classical EdgeConv layers with QuantumEdgeConv layers,
-    which process edge features through parameterized quantum circuits.    
-    Architecture:
-        6 QuantumEdgeConv layers (mirroring LundNet structure)
-        Same classical post-processing as LundNet
         
     Note:
         - Requires PennyLane: pip install pennylane
@@ -221,7 +215,6 @@ class QLundNet(torch.nn.Module):
     
     def forward(self, data):
         """
-        Forward pass through quantum GNN.
         
         Args:
             data: PyTorch Geometric Data object with:
