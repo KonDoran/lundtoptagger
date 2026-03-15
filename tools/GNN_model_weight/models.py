@@ -64,22 +64,35 @@ class Net(torch.nn.Module):
 class Combiner(torch.nn.Module):
     def __init__(self):
         super(Combiner, self).__init__()
-        self.hidden = nn.Linear(2, 3)
-        self.output = nn.Linear(3, 1)
+        self.hidden = nn.Linear(5, 6)
+        self.output = nn.Linear(6, 1)
 
     def forward(self, score_a, score_b=None):
         if score_b is None:
             x = score_a
             if x.dim() == 1:
                 x = x.unsqueeze(1)
-            if x.size(-1) != 2:
-                raise ValueError("combiner expects two input scores per jet (shape [N, 2]).")
+            if x.size(-1) == 2:
+                score_diff = x[:, 0:1] - x[:, 1:2]
+                score_absdiff = torch.abs(score_diff)
+                score_max = torch.maximum(x[:, 0:1], x[:, 1:2])
+                x = torch.cat((x, score_diff, score_absdiff, score_max), dim=1)
+            elif x.size(-1) == 3:
+                score_diff = x[:, 2:3]
+                score_absdiff = torch.abs(score_diff)
+                score_max = torch.maximum(x[:, 0:1], x[:, 1:2])
+                x = torch.cat((x, score_absdiff, score_max), dim=1)
+            elif x.size(-1) != 5:
+                raise ValueError("combiner expects features with shape [N, 5] (logit_a, logit_b, diff, abs_diff, max) or legacy [N, 3]/[N, 2].")
         else:
             if score_a.dim() > 1:
                 score_a = score_a.squeeze(-1)
             if score_b.dim() > 1:
                 score_b = score_b.squeeze(-1)
-            x = torch.stack((score_a, score_b), dim=1)
+            score_diff = score_a - score_b
+            score_absdiff = torch.abs(score_diff)
+            score_max = torch.maximum(score_a, score_b)
+            x = torch.stack((score_a, score_b, score_diff, score_absdiff, score_max), dim=1)
 
         x = x.float()
         x = F.relu(self.hidden(x))

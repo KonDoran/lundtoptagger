@@ -77,7 +77,16 @@ def preprocess_for_training(labels, score1, score2):
     if labels.size == 0:
         raise ValueError("No valid binary labels found after preprocessing.")
 
-    x = np.stack((score1, score2), axis=1).astype(np.float32)
+    eps = 1e-6
+    score1_clip = np.clip(score1, eps, 1.0 - eps)
+    score2_clip = np.clip(score2, eps, 1.0 - eps)
+    logit1 = np.log(score1_clip / (1.0 - score1_clip))
+    logit2 = np.log(score2_clip / (1.0 - score2_clip))
+    score_diff = score1 - score2
+    score_absdiff = np.abs(score_diff)
+    score_max = np.maximum(score1, score2)
+
+    x = np.stack((logit1, logit2, score_diff, score_absdiff, score_max), axis=1).astype(np.float32)
     y = labels.astype(np.float32).reshape(-1, 1)
     return x, y
 
@@ -159,6 +168,13 @@ def main():
         random_state=seed,
         stratify=stratify,
     )
+
+    # Standardize features using training-set statistics only.
+    x_mean = x_train.mean(axis=0, keepdims=True)
+    x_std = x_train.std(axis=0, keepdims=True)
+    x_std = np.where(x_std < 1e-12, 1.0, x_std)
+    x_train = ((x_train - x_mean) / x_std).astype(np.float32)
+    x_val = ((x_val - x_mean) / x_std).astype(np.float32)
 
     train_ds = TensorDataset(torch.from_numpy(x_train), torch.from_numpy(y_train))
     val_ds = TensorDataset(torch.from_numpy(x_val), torch.from_numpy(y_val))
