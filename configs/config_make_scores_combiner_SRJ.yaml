@@ -3,8 +3,10 @@
 # ============================================================
 data:
   # Single pattern (most common)
-  paths_to_test_file_root: "/path/to/input/root/files/*.root"
-  paths_to_test_file_graphs: "/path/to/input/graph/files/*.pt"
+  paths_to_test_file_root: 
+  - "/home/xzcapcdo/dijet/Batch/pt20-160_eta3.2-4.5-minsplits2/part1_30percent/data_dijet_batch*_ln_kT_cut_None.root"
+  #- "/home/xzcapcdo/dijet/Batch/pt20-160_eta3.2-4.5-FTAG1-3/part3_10percent/data_dijet_batch*_ln_kT_cut_None.root"
+  paths_to_test_file_graphs: "/home/xzcapcdo/dijet/Batch/preprocessed/pt20-160_eta3.2-4.5/70%train30%test-2/test/processed_graphs_dijet_batch*_ln_kT_cut_None_with_pt"
 
   # Example with multiple input patterns/files:
   # paths_to_test_file_root:
@@ -14,10 +16,10 @@ data:
   #   - "/path/to/input/graph/files/partA/*.pt"
   #   - "/path/to/input/graph/files/partB/*.pt"
 
-  path_to_outdir: "/path/to/output/combined_scores/{sample}/"
+  path_to_outdir: "/home/xzcapcdo/srj/test/pt_160_eta_3.2_4.5/2026/70%train30%test/FTAG1/{sample}/"
 
-  output_suffix: "_score_Combined"
-  sample: "sample_name"
+  output_suffix: "_score_Combinedlambda0.5"
+  sample: "30%Combined30%test-5"
   kT_cut: null
   tree_name: "FlatSubstructureJetTree"
 
@@ -29,11 +31,11 @@ test:
   lundnet_model:
     tag: "LundNet"
     arch: "LundNet"
-    ckpt: "/path/to/lundnet_checkpoint.pt"
+    ckpt: "/home/xzcapcdo/srj/train/pt_160_eta_3.2_4.5/batch/70%train30%test-FTAG1/LundNet_dijet_ln_kT_cut_None_e017_0.41195.pt"
 
   combiner_model:
     tag: "Combined"
-    ckpt: "/path/to/combiner_checkpoint.pt"
+    ckpt: "/home/xzcapcdo/srj/train/pt_160_eta_3.2_4.5/batch/70%30%Combiner/Combiner_20260316_005909/Combiner_e008_0.63990.pt"
 
   # parT score branch is fixed in script as: parT_score
 

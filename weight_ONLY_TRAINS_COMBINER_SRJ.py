@@ -6,6 +6,7 @@ import os
 import numpy as np
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from sklearn.model_selection import train_test_split
 from torch.utils.data import DataLoader, TensorDataset
 import uproot
@@ -18,6 +19,63 @@ try:
 except ImportError:
     from tools.GNN_model_weight.models import combiner as CombinerModel
 
+
+# ── Loss functions ─────────────────────────────────────────────────────────────
+
+def pairwise_ranking_loss(scores, labels):
+    """
+    For every (positive, negative) pair in the batch, penalise the network
+    when the positive is ranked below the negative.
+    Directly approximates AUC: perfect AUC = loss of 0.
+    """
+    scores = scores.squeeze()
+    labels = labels.squeeze()
+
+    pos_mask = labels == 1
+    neg_mask = labels == 0
+
+    pos_scores = scores[pos_mask]  # shape [P]
+    neg_scores = scores[neg_mask]  # shape [N]
+
+    if pos_scores.numel() == 0 or neg_scores.numel() == 0:
+        return torch.tensor(0.0, requires_grad=True).to(scores.device)
+
+    # All pairwise differences: shape [P, N]
+    diff = pos_scores.unsqueeze(1) - neg_scores.unsqueeze(0)
+
+    # Loss is 0 when positive is ranked well above negative
+    loss = -torch.log(torch.sigmoid(diff)).mean()
+    return loss
+
+
+def no_worse_regularisation(outputs, features, labels, alpha, lambda_reg=0.5, lambda_entropy=0.1):
+    """
+    Two-part regularisation:
+    - No-worse penalty: fires when combiner ranks worse than the better individual model
+    - Entropy penalty: discourages alpha collapsing to 0 or 1, keeping the gate active
+    """
+    score_a = features[:, 0:1]
+    score_b = features[:, 1:2]
+
+    loss_a = pairwise_ranking_loss(score_a, labels)
+    loss_b = pairwise_ranking_loss(score_b, labels)
+    best_individual_loss = torch.min(loss_a, loss_b)
+
+    meta_loss = pairwise_ranking_loss(outputs, labels)
+    no_worse_penalty = F.relu(meta_loss - best_individual_loss)
+
+    # Binary entropy: maximised at alpha=0.5, zero at alpha=0 or alpha=1
+    # Negated so minimising loss maximises entropy (keeps gate from collapsing)
+    eps = 1e-6
+    alpha_clamped = alpha.clamp(eps, 1 - eps)
+    entropy = -(alpha_clamped * torch.log(alpha_clamped) +
+                (1 - alpha_clamped) * torch.log(1 - alpha_clamped))
+    entropy_penalty = -entropy.mean()  # negative because we want to maximise entropy
+
+    return lambda_reg * no_worse_penalty + lambda_entropy * entropy_penalty
+
+
+# ── Data utilities ─────────────────────────────────────────────────────────────
 
 def resolve_root_files(root_dir, root_pattern="*.root"):
     if os.path.isfile(root_dir):
@@ -38,7 +96,7 @@ def extract_from_root(files, tree_name, label_branch, score_branches):
         raise ValueError("score_branches must contain exactly two branch names.")
 
     score1_branch, score2_branch = score_branches
-    labels_all, score1_all, score2_all = [], [], []
+    labels_all, features_all = [], []
 
     for file_path in files:
         with uproot.open(file_path) as f_in:
@@ -48,50 +106,46 @@ def extract_from_root(files, tree_name, label_branch, score_branches):
             tree = f_in[tree_name]
             arrays = tree.arrays([label_branch, score1_branch, score2_branch], library="np")
 
-        labels_all.append(np.asarray(arrays[label_branch]).reshape(-1))
-        score1_all.append(np.asarray(arrays[score1_branch]).reshape(-1))
-        score2_all.append(np.asarray(arrays[score2_branch]).reshape(-1))
+        labels = np.asarray(arrays[label_branch]).reshape(-1)
+        score1 = np.asarray(arrays[score1_branch]).reshape(-1)
+        score2 = np.asarray(arrays[score2_branch]).reshape(-1)
+        features = np.stack((score1, score2), axis=1)
+
+        labels_all.append(labels)
+        features_all.append(features)
 
     labels = np.concatenate(labels_all, axis=0)
-    score1 = np.concatenate(score1_all, axis=0)
-    score2 = np.concatenate(score2_all, axis=0)
-    return labels, score1, score2
+    features = np.concatenate(features_all, axis=0)
+    return labels, features
 
 
-def preprocess_for_training(labels, score1, score2):
+def preprocess_for_training(labels, features):
     labels = np.asarray(labels).reshape(-1)
-    score1 = np.asarray(score1).reshape(-1)
-    score2 = np.asarray(score2).reshape(-1)
+    features = np.asarray(features)
 
-    valid_mask = np.isfinite(labels) & np.isfinite(score1) & np.isfinite(score2)
+    if features.ndim != 2 or features.shape[1] != 2:
+        raise ValueError("features must have shape [N, 2].")
+
+    valid_mask = np.isfinite(labels) & np.all(np.isfinite(features), axis=1)
     labels = labels[valid_mask]
-    score1 = score1[valid_mask]
-    score2 = score2[valid_mask]
+    features = features[valid_mask]
 
     labels = np.rint(labels).astype(np.int64)
     binary_mask = (labels == 0) | (labels == 1)
     labels = labels[binary_mask]
-    score1 = score1[binary_mask]
-    score2 = score2[binary_mask]
+    features = features[binary_mask]
 
     if labels.size == 0:
         raise ValueError("No valid binary labels found after preprocessing.")
 
-    eps = 1e-6
-    score1_clip = np.clip(score1, eps, 1.0 - eps)
-    score2_clip = np.clip(score2, eps, 1.0 - eps)
-    logit1 = np.log(score1_clip / (1.0 - score1_clip))
-    logit2 = np.log(score2_clip / (1.0 - score2_clip))
-    score_diff = score1 - score2
-    score_absdiff = np.abs(score_diff)
-    score_max = np.maximum(score1, score2)
-
-    x = np.stack((logit1, logit2, score_diff, score_absdiff, score_max), axis=1).astype(np.float32)
+    x = features.astype(np.float32)
     y = labels.astype(np.float32).reshape(-1, 1)
     return x, y
 
 
-def evaluate(model, loader, criterion, device):
+# ── Evaluation ─────────────────────────────────────────────────────────────────
+
+def evaluate(model, loader, device):
     model.eval()
     total_loss = 0.0
     total_count = 0
@@ -99,14 +153,16 @@ def evaluate(model, loader, criterion, device):
         for features, labels in loader:
             features = features.to(device)
             labels = labels.to(device)
-            outputs = model(features)
-            loss = criterion(outputs, labels)
+            outputs, _ = model(features)
+            loss = pairwise_ranking_loss(outputs, labels)
             batch_count = labels.size(0)
             total_loss += loss.item() * batch_count
             total_count += batch_count
 
     return total_loss / max(total_count, 1)
 
+
+# ── Main ───────────────────────────────────────────────────────────────────────
 
 def main():
     parser = argparse.ArgumentParser(description="Train Combiner model from ROOT score branches")
@@ -121,6 +177,7 @@ def main():
     data_cfg = config["data"]
     train_cfg = config["training"]
     output_cfg = config["output"]
+    model_cfg = config.get("model", {})
 
     root_dir = data_cfg["root_dir"]
     root_pattern = data_cfg.get("root_pattern", "*.root")
@@ -135,8 +192,11 @@ def main():
     n_epochs = int(train_cfg["n_epochs"])
     batch_size = int(train_cfg["batch_size"])
     learning_rate = float(train_cfg["learning_rate"])
+    lambda_reg = float(train_cfg.get("lambda_reg", 0.5))
     num_workers = int(config.get("num_workers", 0))
     seed = int(config.get("seed", 42))
+
+    initial_alpha_bias = float(model_cfg.get("initial_alpha_bias", 1.5))
 
     save_every_epoch = bool(output_cfg.get("save_every_epoch", True))
     checkpoint_prefix = output_cfg.get("checkpoint_prefix", "Combiner")
@@ -153,8 +213,8 @@ def main():
     files = resolve_root_files(root_dir, root_pattern)
     print(f"Found {len(files)} ROOT file(s) to load.")
 
-    labels, score1, score2 = extract_from_root(files, tree_name, label_branch, score_branches)
-    x, y = preprocess_for_training(labels, score1, score2)
+    labels, features = extract_from_root(files, tree_name, label_branch, score_branches)
+    x, y = preprocess_for_training(labels, features)
     print(f"Loaded {len(y)} jets after preprocessing.")
 
     y_flat = y.reshape(-1)
@@ -169,13 +229,6 @@ def main():
         stratify=stratify,
     )
 
-    # Standardize features using training-set statistics only.
-    x_mean = x_train.mean(axis=0, keepdims=True)
-    x_std = x_train.std(axis=0, keepdims=True)
-    x_std = np.where(x_std < 1e-12, 1.0, x_std)
-    x_train = ((x_train - x_mean) / x_std).astype(np.float32)
-    x_val = ((x_val - x_mean) / x_std).astype(np.float32)
-
     train_ds = TensorDataset(torch.from_numpy(x_train), torch.from_numpy(y_train))
     val_ds = TensorDataset(torch.from_numpy(x_val), torch.from_numpy(y_val))
     train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True, num_workers=num_workers)
@@ -189,40 +242,50 @@ def main():
     device = torch.device(device_id)
     print(f"Using device: {device}")
 
-    model = CombinerModel().to(device)
+    model = CombinerModel(initial_alpha_bias=initial_alpha_bias).to(device)
+    print(f"Combiner gate initialised with alpha bias {initial_alpha_bias:.2f} "
+          f"(starting alpha ≈ {torch.sigmoid(torch.tensor(initial_alpha_bias)).item():.2f})")
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
-    criterion = nn.BCELoss()
 
     val_loss_path = os.path.join(save_dir, val_loss_filename)
     with open(val_loss_path, "w", encoding="utf-8") as f_out:
-        f_out.write("epoch,train_loss,val_loss\n")
+        f_out.write("epoch,train_loss,val_loss,mean_alpha\n")
 
     for epoch in range(1, n_epochs + 1):
         model.train()
         total_train_loss = 0.0
         total_train_count = 0
+        alpha_accumulator = 0.0
 
         for features, labels_batch in train_loader:
             features = features.to(device)
             labels_batch = labels_batch.to(device)
 
             optimizer.zero_grad()
-            outputs = model(features)
-            loss = criterion(outputs, labels_batch)
+            outputs, alpha = model(features)
+            loss = pairwise_ranking_loss(outputs, labels_batch) + \
+                    no_worse_regularisation(outputs, features, labels_batch, alpha, lambda_reg)
             loss.backward()
             optimizer.step()
 
             batch_count = labels_batch.size(0)
             total_train_loss += loss.item() * batch_count
             total_train_count += batch_count
+            alpha_accumulator += alpha.mean().item() * batch_count
 
         train_loss = total_train_loss / max(total_train_count, 1)
-        val_loss = evaluate(model, val_loader, criterion, device)
+        mean_alpha = alpha_accumulator / max(total_train_count, 1)
+        val_loss = evaluate(model, val_loader, device)
 
         with open(val_loss_path, "a", encoding="utf-8") as f_out:
-            f_out.write(f"{epoch},{train_loss:.8f},{val_loss:.8f}\n")
+            f_out.write(f"{epoch},{train_loss:.8f},{val_loss:.8f},{mean_alpha:.6f}\n")
 
-        print(f"Epoch {epoch:03d}/{n_epochs:03d} | train_loss={train_loss:.6f} | val_loss={val_loss:.6f}")
+        print(
+            f"Epoch {epoch:03d}/{n_epochs:03d} | "
+            f"train_loss={train_loss:.6f} | "
+            f"val_loss={val_loss:.6f} | "
+            f"mean_alpha={mean_alpha:.4f}"
+        )
 
         if save_every_epoch or epoch == n_epochs:
             ckpt_name = f"{checkpoint_prefix}_e{epoch:03d}_{val_loss:.5f}.pt"

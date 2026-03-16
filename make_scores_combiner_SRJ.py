@@ -179,7 +179,8 @@ def main():
 
         features = torch.from_numpy(np.stack((lund_scores, part_scores), axis=1)).to(device)
         with torch.no_grad():
-            combined_scores = combiner_model(features).cpu().numpy().reshape(-1).astype(np.float32)
+            combined_scores, _ = combiner_model(features)
+            combined_scores = combined_scores.cpu().numpy().reshape(-1).astype(np.float32)
 
         arrays[lund_score_branch] = lund_scores
         arrays[combined_score_branch] = combined_scores

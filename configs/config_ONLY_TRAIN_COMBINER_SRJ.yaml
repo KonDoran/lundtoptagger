@@ -2,42 +2,37 @@
 # Data
 # ============================================================
 data:
-  root_dir: "/path/to/root/files_or_single_file"
+  root_dir: "/home/xzcapcdo/srj/test/pt_160_eta_3.2_4.5/2026/70%train30%test/FTAG1/Final_Scores_TEST_70%30%_2048_kTNone.root"
   root_pattern: "*.root"
   tree_name: "FlatSubstructureJetTree"
   label_branch: "labels"
   score_branches:
-    - "score_model_1"
-    - "score_model_2"
-
-
+    - "parT_score"
+    - "fjet_LundNet_FTAG1_score"
 # ============================================================
 # Model
 # ============================================================
 model:
   name: "Combiner"
-
-
+  initial_alpha_bias: 0.5   # sigmoid(0.5) ≈ 0.62, favouring score_a (parT)
 # ============================================================
 # Training
 # ============================================================
 training:
-  n_epochs: 50
+  n_epochs: 100
   batch_size: 4096
   learning_rate: 0.001
   validation_fraction: 0.1
-
-
+  lambda_reg: 0.5       # Regularisation strength for no-worse penalty.
+                        # 0.0 = disabled, sweep [0.1, 0.5, 1.0, 2.0] to tune.
 # ============================================================
 # Output
 # ============================================================
 output:
-  path_to_save: "/path/to/save/combiner_checkpoints"
+  path_to_save: "/home/xzcapcdo/srj/train/pt_160_eta_3.2_4.5/batch/70%30%Combiner/"
   checkpoint_prefix: "Combiner"
   save_every_epoch: true
   val_loss_filename: "validation_losses.txt"
-
-
 # ============================================================
 # Computing resources
 # ============================================================
