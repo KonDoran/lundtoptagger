@@ -238,33 +238,33 @@ class QLundNet(torch.nn.Module):
         
         # HYBRID APPROACH: Use Quantum layer only for first layer to improve performance
         self.conv1 = QuantumEdgeConv(
-            in_channels=3, out_channels=32, 
+            in_channels=3, out_channels=16,
             n_qubits=n_qubits, n_layers=n_quantum_layers, aggr='add'
         )
         
         # Use classical EdgeConv for remaining layers for speed
-        self.conv2 = EdgeConv(nn.Sequential(nn.Linear(64, 32), nn.BatchNorm1d(num_features=32), nn.ReLU(),
-                                            nn.Linear(32, 32), nn.BatchNorm1d(num_features=32), nn.ReLU()),aggr='add')
-        self.conv3 = EdgeConv(nn.Sequential(nn.Linear(64,64), nn.BatchNorm1d(num_features=64), nn.ReLU(),
-                                            nn.Linear(64, 64), nn.BatchNorm1d(num_features=64), nn.ReLU()),aggr='add')
-        self.conv4 = EdgeConv(nn.Sequential(nn.Linear(128, 64), nn.BatchNorm1d(num_features=64), nn.ReLU(),
-                                            nn.Linear(64, 64), nn.BatchNorm1d(num_features=64), nn.ReLU()),aggr='add')
-        self.conv5 = EdgeConv(nn.Sequential(nn.Linear(128, 128), nn.BatchNorm1d(num_features=128), nn.ReLU(),
-                                            nn.Linear(128, 128), nn.BatchNorm1d(num_features=128), nn.ReLU()),aggr='add')
-        self.conv6 = EdgeConv(nn.Sequential(nn.Linear(256, 128), nn.BatchNorm1d(num_features=128), nn.ReLU(),
-                                            nn.Linear(128, 128), nn.BatchNorm1d(num_features=128), nn.ReLU()),aggr='add')
+        self.conv2 = EdgeConv(nn.Sequential(nn.Linear(32, 16), nn.BatchNorm1d(num_features=16), nn.ReLU(),
+                            nn.Linear(16, 16), nn.BatchNorm1d(num_features=16), nn.ReLU()),aggr='add')
+        self.conv3 = EdgeConv(nn.Sequential(nn.Linear(32,32), nn.BatchNorm1d(num_features=32), nn.ReLU(),
+                            nn.Linear(32, 32), nn.BatchNorm1d(num_features=32), nn.ReLU()),aggr='add')
+        self.conv4 = EdgeConv(nn.Sequential(nn.Linear(64, 32), nn.BatchNorm1d(num_features=32), nn.ReLU(),
+                            nn.Linear(32, 32), nn.BatchNorm1d(num_features=32), nn.ReLU()),aggr='add')
+        self.conv5 = EdgeConv(nn.Sequential(nn.Linear(64, 64), nn.BatchNorm1d(num_features=64), nn.ReLU(),
+                            nn.Linear(64, 64), nn.BatchNorm1d(num_features=64), nn.ReLU()),aggr='add')
+        self.conv6 = EdgeConv(nn.Sequential(nn.Linear(128, 64), nn.BatchNorm1d(num_features=64), nn.ReLU(),
+                            nn.Linear(64, 64), nn.BatchNorm1d(num_features=64), nn.ReLU()),aggr='add')
         
         # Same classical layers as LundNet
         self.seq1 = nn.Sequential(
-            nn.Linear(448, 384),  # 32+32+64+64+128+128 = 448
-            nn.BatchNorm1d(num_features=384),
+            nn.Linear(224, 192),  # 16+16+32+32+64+64 = 224
+            nn.BatchNorm1d(num_features=192),
             nn.ReLU()
         )
         self.seq2 = nn.Sequential(
-            nn.Linear(385, 256),  # 384 + 1 (Ntrk)
+            nn.Linear(193, 128),  # 192 + 1 (Ntrk)
             nn.ReLU()
         )
-        self.lin = nn.Linear(256, 1)
+        self.lin = nn.Linear(128, 1)
     
     def forward(self, data):
         """
