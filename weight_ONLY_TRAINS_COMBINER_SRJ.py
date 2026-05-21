@@ -5,8 +5,6 @@ import os
 
 import numpy as np
 import torch
-import torch.nn as nn
-import torch.nn.functional as F
 from sklearn.model_selection import train_test_split
 from torch.utils.data import DataLoader, TensorDataset
 import uproot
@@ -48,33 +46,6 @@ def pairwise_ranking_loss(scores, labels):
     return loss
 
 
-def no_worse_regularisation(outputs, features, labels, alpha, lambda_reg=0.5, lambda_entropy=0.1):
-    """
-    Two-part regularisation:
-    - No-worse penalty: fires when combiner ranks worse than the better individual model
-    - Entropy penalty: discourages alpha collapsing to 0 or 1, keeping the gate active
-    """
-    score_a = features[:, 0:1]
-    score_b = features[:, 1:2]
-
-    loss_a = pairwise_ranking_loss(score_a, labels)
-    loss_b = pairwise_ranking_loss(score_b, labels)
-    best_individual_loss = torch.min(loss_a, loss_b)
-
-    meta_loss = pairwise_ranking_loss(outputs, labels)
-    no_worse_penalty = F.relu(meta_loss - best_individual_loss)
-
-    # Binary entropy: maximised at alpha=0.5, zero at alpha=0 or alpha=1
-    # Negated so minimising loss maximises entropy (keeps gate from collapsing)
-    eps = 1e-6
-    alpha_clamped = alpha.clamp(eps, 1 - eps)
-    entropy = -(alpha_clamped * torch.log(alpha_clamped) +
-                (1 - alpha_clamped) * torch.log(1 - alpha_clamped))
-    entropy_penalty = -entropy.mean()  # negative because we want to maximise entropy
-
-    return lambda_reg * no_worse_penalty + lambda_entropy * entropy_penalty
-
-
 # ── Data utilities ─────────────────────────────────────────────────────────────
 
 def resolve_root_files(root_dir, root_pattern="*.root"):
@@ -91,11 +62,7 @@ def resolve_root_files(root_dir, root_pattern="*.root"):
     return files
 
 
-def extract_from_root(files, tree_name, label_branch, score_branches):
-    if len(score_branches) != 2:
-        raise ValueError("score_branches must contain exactly two branch names.")
-
-    score1_branch, score2_branch = score_branches
+def extract_from_root(files, tree_name, label_branch, feature_branches):
     labels_all, features_all = [], []
 
     for file_path in files:
@@ -104,12 +71,11 @@ def extract_from_root(files, tree_name, label_branch, score_branches):
                 raise KeyError(f"Tree '{tree_name}' not found in {file_path}")
 
             tree = f_in[tree_name]
-            arrays = tree.arrays([label_branch, score1_branch, score2_branch], library="np")
+            arrays = tree.arrays([label_branch] + feature_branches, library="np")
 
         labels = np.asarray(arrays[label_branch]).reshape(-1)
-        score1 = np.asarray(arrays[score1_branch]).reshape(-1)
-        score2 = np.asarray(arrays[score2_branch]).reshape(-1)
-        features = np.stack((score1, score2), axis=1)
+        cols = [np.asarray(arrays[b]).reshape(-1) for b in feature_branches]
+        features = np.stack(cols, axis=1)
 
         labels_all.append(labels)
         features_all.append(features)
@@ -123,8 +89,8 @@ def preprocess_for_training(labels, features):
     labels = np.asarray(labels).reshape(-1)
     features = np.asarray(features)
 
-    if features.ndim != 2 or features.shape[1] != 2:
-        raise ValueError("features must have shape [N, 2].")
+    if features.ndim != 2 or features.shape[1] != 4:
+        raise ValueError("features must have shape [N, 4].")
 
     valid_mask = np.isfinite(labels) & np.all(np.isfinite(features), axis=1)
     labels = labels[valid_mask]
@@ -153,7 +119,7 @@ def evaluate(model, loader, device):
         for features, labels in loader:
             features = features.to(device)
             labels = labels.to(device)
-            outputs, _ = model(features)
+            outputs = model(features)
             loss = pairwise_ranking_loss(outputs, labels)
             batch_count = labels.size(0)
             total_loss += loss.item() * batch_count
@@ -184,6 +150,8 @@ def main():
     tree_name = data_cfg.get("tree_name", "FlatSubstructureJetTree")
     label_branch = data_cfg["label_branch"]
     score_branches = data_cfg["score_branches"]
+    extra_branches = data_cfg.get("extra_branches", ["fjet_Nconst", "fjet_Nconst_Charged"])
+    feature_branches = score_branches + extra_branches
 
     validation_fraction = float(train_cfg["validation_fraction"])
     if validation_fraction <= 0.0 or validation_fraction >= 1.0:
@@ -192,11 +160,10 @@ def main():
     n_epochs = int(train_cfg["n_epochs"])
     batch_size = int(train_cfg["batch_size"])
     learning_rate = float(train_cfg["learning_rate"])
-    lambda_reg = float(train_cfg.get("lambda_reg", 0.5))
     num_workers = int(config.get("num_workers", 0))
     seed = int(config.get("seed", 42))
 
-    initial_alpha_bias = float(model_cfg.get("initial_alpha_bias", 1.5))
+    hidden_size = int(model_cfg.get("hidden_size", 64))
 
     save_every_epoch = bool(output_cfg.get("save_every_epoch", True))
     checkpoint_prefix = output_cfg.get("checkpoint_prefix", "Combiner")
@@ -213,7 +180,7 @@ def main():
     files = resolve_root_files(root_dir, root_pattern)
     print(f"Found {len(files)} ROOT file(s) to load.")
 
-    labels, features = extract_from_root(files, tree_name, label_branch, score_branches)
+    labels, features = extract_from_root(files, tree_name, label_branch, feature_branches)
     x, y = preprocess_for_training(labels, features)
     print(f"Loaded {len(y)} jets after preprocessing.")
 
@@ -242,49 +209,43 @@ def main():
     device = torch.device(device_id)
     print(f"Using device: {device}")
 
-    model = CombinerModel(initial_alpha_bias=initial_alpha_bias).to(device)
-    print(f"Combiner gate initialised with alpha bias {initial_alpha_bias:.2f} "
-          f"(starting alpha ≈ {torch.sigmoid(torch.tensor(initial_alpha_bias)).item():.2f})")
+    model = CombinerModel(hidden_size=hidden_size).to(device)
+    print(f"Combiner MLP initialised with hidden_size={hidden_size}")
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
 
     val_loss_path = os.path.join(save_dir, val_loss_filename)
     with open(val_loss_path, "w", encoding="utf-8") as f_out:
-        f_out.write("epoch,train_loss,val_loss,mean_alpha\n")
+        f_out.write("epoch,train_loss,val_loss\n")
 
     for epoch in range(1, n_epochs + 1):
         model.train()
         total_train_loss = 0.0
         total_train_count = 0
-        alpha_accumulator = 0.0
 
         for features, labels_batch in train_loader:
             features = features.to(device)
             labels_batch = labels_batch.to(device)
 
             optimizer.zero_grad()
-            outputs, alpha = model(features)
-            loss = pairwise_ranking_loss(outputs, labels_batch) + \
-                    no_worse_regularisation(outputs, features, labels_batch, alpha, lambda_reg)
+            outputs = model(features)
+            loss = pairwise_ranking_loss(outputs, labels_batch)
             loss.backward()
             optimizer.step()
 
             batch_count = labels_batch.size(0)
             total_train_loss += loss.item() * batch_count
             total_train_count += batch_count
-            alpha_accumulator += alpha.mean().item() * batch_count
 
         train_loss = total_train_loss / max(total_train_count, 1)
-        mean_alpha = alpha_accumulator / max(total_train_count, 1)
         val_loss = evaluate(model, val_loader, device)
 
         with open(val_loss_path, "a", encoding="utf-8") as f_out:
-            f_out.write(f"{epoch},{train_loss:.8f},{val_loss:.8f},{mean_alpha:.6f}\n")
+            f_out.write(f"{epoch},{train_loss:.8f},{val_loss:.8f}\n")
 
         print(
             f"Epoch {epoch:03d}/{n_epochs:03d} | "
             f"train_loss={train_loss:.6f} | "
-            f"val_loss={val_loss:.6f} | "
-            f"mean_alpha={mean_alpha:.4f}"
+            f"val_loss={val_loss:.6f}"
         )
 
         if save_every_epoch or epoch == n_epochs:

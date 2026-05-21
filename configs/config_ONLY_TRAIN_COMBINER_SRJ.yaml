@@ -9,12 +9,15 @@ data:
   score_branches:
     - "parT_score"
     - "fjet_LundNet_FTAG1_score"
+  extra_branches:
+    - "fjet_Nconst"
+    - "fjet_Nconst_Charged"
 # ============================================================
 # Model
 # ============================================================
 model:
   name: "Combiner"
-  initial_alpha_bias: 0.5   # sigmoid(0.5) ≈ 0.62, favouring score_a (parT)
+  hidden_size: 64
 # ============================================================
 # Training
 # ============================================================
@@ -23,8 +26,6 @@ training:
   batch_size: 4096
   learning_rate: 0.001
   validation_fraction: 0.1
-  lambda_reg: 0.5       # Regularisation strength for no-worse penalty.
-                        # 0.0 = disabled, sweep [0.1, 0.5, 1.0, 2.0] to tune.
 # ============================================================
 # Output
 # ============================================================

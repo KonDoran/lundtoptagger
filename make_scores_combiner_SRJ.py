@@ -20,6 +20,8 @@ except ImportError:
 
 
 PART_SCORE_BRANCH = "parT_score"
+NCONST_BRANCH = "fjet_Nconst"
+NCONST_CHARGED_BRANCH = "fjet_Nconst_Charged"
 
 
 def build_model_by_name(name):
@@ -168,18 +170,19 @@ def main():
                 f"Entry mismatch for {os.path.basename(fg)}: ROOT has {len(arrays)} entries, graph has {n_jets}."
             )
 
-        if PART_SCORE_BRANCH not in arrays.fields:
-            raise KeyError(f"Branch '{PART_SCORE_BRANCH}' not found in ROOT file {fr}")
+        for branch in (PART_SCORE_BRANCH, NCONST_BRANCH, NCONST_CHARGED_BRANCH):
+            if branch not in arrays.fields:
+                raise KeyError(f"Branch '{branch}' not found in ROOT file {fr}")
 
         part_scores = np.asarray(arrays[PART_SCORE_BRANCH]).reshape(-1).astype(np.float32)
-        if part_scores.shape[0] != n_jets:
-            raise ValueError(
-                f"Branch '{PART_SCORE_BRANCH}' has {part_scores.shape[0]} entries, expected {n_jets}."
-            )
+        nconst = np.asarray(arrays[NCONST_BRANCH]).reshape(-1).astype(np.float32)
+        nconst_charged = np.asarray(arrays[NCONST_CHARGED_BRANCH]).reshape(-1).astype(np.float32)
 
-        features = torch.from_numpy(np.stack((lund_scores, part_scores), axis=1)).to(device)
+        features = torch.from_numpy(
+            np.stack((lund_scores, part_scores, nconst, nconst_charged), axis=1)
+        ).to(device)
         with torch.no_grad():
-            combined_scores, _ = combiner_model(features)
+            combined_scores = combiner_model(features)
             combined_scores = combined_scores.cpu().numpy().reshape(-1).astype(np.float32)
 
         arrays[lund_score_branch] = lund_scores
