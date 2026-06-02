@@ -89,8 +89,8 @@ def preprocess_for_training(labels, features):
     labels = np.asarray(labels).reshape(-1)
     features = np.asarray(features)
 
-    if features.ndim != 2 or features.shape[1] != 4:
-        raise ValueError("features must have shape [N, 4].")
+    if features.ndim != 2 or features.shape[1] != 5:
+        raise ValueError("features must have shape [N, 5].")
 
     valid_mask = np.isfinite(labels) & np.all(np.isfinite(features), axis=1)
     labels = labels[valid_mask]

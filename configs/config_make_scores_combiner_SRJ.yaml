@@ -35,6 +35,7 @@ test:
 
   combiner_model:
     tag: "Combined"
+    hidden_size: 16
     ckpt: "/home/xzcapcdo/srj/train/pt_160_eta_3.2_4.5/batch/70%30%Combiner/Combiner_20260316_005909/Combiner_e008_0.63990.pt"
 
   # parT score branch is fixed in script as: parT_score

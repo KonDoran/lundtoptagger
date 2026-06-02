@@ -22,6 +22,7 @@ except ImportError:
 PART_SCORE_BRANCH = "parT_score"
 NCONST_BRANCH = "fjet_Nconst"
 NCONST_CHARGED_BRANCH = "fjet_Nconst_Charged"
+MASS_BRANCH = "fjet_m"
 
 
 def build_model_by_name(name):
@@ -122,6 +123,7 @@ def main():
     lund_ckpt = config["test"]["lundnet_model"]["ckpt"]
 
     combined_tag = config["test"]["combiner_model"]["tag"]
+    combiner_hidden_size = int(config["test"]["combiner_model"].get("hidden_size", 64))
     combiner_ckpt = config["test"]["combiner_model"]["ckpt"]
 
     lund_score_branch = score_branch_template.format(tag=lund_tag)
@@ -137,7 +139,7 @@ def main():
     lund_model.eval()
 
     print("Loading Combiner checkpoint...")
-    combiner_model = CombinerModel()
+    combiner_model = CombinerModel(hidden_size=combiner_hidden_size)
     combiner_model.load_state_dict(torch.load(combiner_ckpt, map_location=device))
     combiner_model.to(device)
     combiner_model.eval()
@@ -170,16 +172,17 @@ def main():
                 f"Entry mismatch for {os.path.basename(fg)}: ROOT has {len(arrays)} entries, graph has {n_jets}."
             )
 
-        for branch in (PART_SCORE_BRANCH, NCONST_BRANCH, NCONST_CHARGED_BRANCH):
+        for branch in (PART_SCORE_BRANCH, NCONST_BRANCH, NCONST_CHARGED_BRANCH, MASS_BRANCH):
             if branch not in arrays.fields:
                 raise KeyError(f"Branch '{branch}' not found in ROOT file {fr}")
 
         part_scores = np.asarray(arrays[PART_SCORE_BRANCH]).reshape(-1).astype(np.float32)
         nconst = np.asarray(arrays[NCONST_BRANCH]).reshape(-1).astype(np.float32)
         nconst_charged = np.asarray(arrays[NCONST_CHARGED_BRANCH]).reshape(-1).astype(np.float32)
+        mass = np.asarray(arrays[MASS_BRANCH]).reshape(-1).astype(np.float32)
 
         features = torch.from_numpy(
-            np.stack((lund_scores, part_scores, nconst, nconst_charged), axis=1)
+            np.stack((lund_scores, part_scores, nconst, nconst_charged, mass), axis=1)
         ).to(device)
         with torch.no_grad():
             combined_scores = combiner_model(features)

@@ -7,17 +7,18 @@ data:
   tree_name: "FlatSubstructureJetTree"
   label_branch: "labels"
   score_branches:
-    - "parT_score"
     - "fjet_LundNet_FTAG1_score"
+    - "parT_score"
   extra_branches:
     - "fjet_Nconst"
     - "fjet_Nconst_Charged"
+    - "fjet_m"
 # ============================================================
 # Model
 # ============================================================
 model:
   name: "Combiner"
-  hidden_size: 64
+  hidden_size: 16
 # ============================================================
 # Training
 # ============================================================

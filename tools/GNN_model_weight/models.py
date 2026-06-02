@@ -64,9 +64,9 @@ class Net(torch.nn.Module):
 class Combiner(torch.nn.Module):
     def __init__(self, hidden_size=64):
         super(Combiner, self).__init__()
-        # 4 inputs: logit_a, logit_b, fjet_Nconst, fjet_Nconst_Charged
+        # 5 inputs: logit_a, logit_b, fjet_Nconst, fjet_Nconst_Charged, fjet_m
         self.mlp = nn.Sequential(
-            nn.Linear(4, hidden_size),
+            nn.Linear(5, hidden_size),
             nn.ReLU(),
             nn.Linear(hidden_size, hidden_size),
             nn.ReLU(),
@@ -76,10 +76,10 @@ class Combiner(torch.nn.Module):
     def forward(self, features):
         if features.dim() == 1:
             features = features.unsqueeze(0)
-        if features.size(-1) != 4:
+        if features.size(-1) != 5:
             raise ValueError(
-                "Combiner expects input with shape [N, 4] "
-                "(score_a, score_b, fjet_Nconst, fjet_Nconst_Charged)."
+                "Combiner expects input with shape [N, 5] "
+                "(score_a, score_b, fjet_Nconst, fjet_Nconst_Charged, fjet_m)."
             )
         features = features.float()
 
@@ -87,12 +87,13 @@ class Combiner(torch.nn.Module):
         raw_b = features[:, 1:2]
         nconst = features[:, 2:3]
         nconst_charged = features[:, 3:4]
+        mass = features[:, 4:5]
 
         eps = 1e-6
         logit_a = torch.log(raw_a.clamp(eps, 1 - eps) / (1 - raw_a.clamp(eps, 1 - eps)))
         logit_b = torch.log(raw_b.clamp(eps, 1 - eps) / (1 - raw_b.clamp(eps, 1 - eps)))
 
-        mlp_input = torch.cat((logit_a, logit_b, nconst, nconst_charged), dim=1)
+        mlp_input = torch.cat((logit_a, logit_b, nconst, nconst_charged, mass), dim=1)
         output = torch.sigmoid(self.mlp(mlp_input))
         return output
 
