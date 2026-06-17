@@ -1,183 +1,145 @@
 # lundtoptagger
 
-Tag top and W jets using the LundNet model.
+Quark/gluon tagging on small-radius jets (SRJ) using graph neural networks on the Lund jet plane, with support for a quantum-hybrid variant (QLundNet) and a score-combination model (Combiner).
+
+This repository was originally built for top/W tagging on large-R jets and has since been extended with a parallel set of scripts (the `*_SRJ.py` files and corresponding `*_SRJ.yaml` configs) for **quark/gluon tagging on small-radius jets**. The Combiner scripts (`weight_ONLY_TRAINS_COMBINER_SRJ.py`, `make_scores_combiner_SRJ.py`) are also designed for the SRJ q/g tagging workflow.
 
 
-## Setup
+## Running on DIAS
 
-On UChicago, samples and flat weights are here:  
-`/data/jmsardain/LJPTagger/FullSplittings/SplitForTopTagger/`
-
-The included setup script can set up the environment on several different systems:
-
-- a system with Red Hat Enterprise Linux 9, an NVIDIA driver which supports CUDA >= 11.8, and access to CVMFS, such as `lxplus-gpu`
-- a system with CentOS 7 and access to CVMFS (currently set up without CUDA)
-- UCL's `gpu02` server and Hypatia GPU partition
-
-The script will automatically figure out which of these systems it is running on and set up the environment accordingly; just do
+This project is designed to run on UCL's DIAS HPC cluster via SLURM. All jobs are submitted using the scripts in the `submit/` directory (and a few top-level `.slurm` files). Each submit script activates the shared conda environment before running:
 
 ```bash
-source setup.sh
+source /share/data1/xucaphue/setup.sh
+conda activate /share/data1/xucaphue/envs/pytorch_py39_cu126
 ```
 
-On UChicago, do
+Jobs are submitted to either the **GPU** partition (training, scoring) or the **COMPUTE** partition (data preparation, preprocessing). For example:
 
 ```bash
-source /data/jmsardain/LJPTagger/JetTagging/miniconda/bin/activate
-conda activate rootenv
+# Submit data preparation as a SLURM array job (one task per event fraction slice)
+sbatch submit/submit_slurm_make_data.sh
+
+# Submit preprocessing
+sbatch submit/submit_preprocess.sh
+
+# Submit a training job
+sbatch submit/submit_slurm_train.sh
+
+# Submit scoring
+sbatch submit/submit_slurm_scores.sh
+
+# Submit combiner training / scoring
+sbatch submit/submit_slurm_train_combiner.sh
+sbatch submit/submit_slurm_scores_combiner.sh
 ```
+
+Logs are written to the `logs/` directory. Email notifications are sent on job start/finish/failure.
+
 
 ## Data preparation
 
-To create graphs for training from ROOT files and save them to a file, first process JETM2 or FTAG1 derivations with the following code:  
-<https://gitlab.cern.ch/rvinasco/jetmdatamc/-/tree/temporaryRun2>  
-Then run `Make_data.py` on the output:
+Run `Make_data_SRJ.py` to create graphs for training from ROOT files:
 
 ```bash
-python Make_data.py configs/config_make_data.yaml
+python Make_data_SRJ.py configs/config_make_data_SRJ.yaml
 ```
 
-The script applies selections defined in the configuration files, creates Lund trees (graphs) for each jet, and calculates weights which make the jet $p_T$ distribution flat.
-Two files are created:
-a file containing a list of graphs (`torch_geometric.data.Data` objects) that can be used for training and testing the tagging model,
-and a ROOT file containing some properties of the jets passing selection:
+The script applies selections defined in the configuration files, creates Lund trees (graphs) for each jet, and outputs graph files (`torch_geometric.data.Data` objects) and a ROOT file containing jet properties (truth labels, $p_T$, $\eta$, mass, constituent counts, etc.).
 
-- DSID (MC channel number) of the dataset from the which the jet was taken
-- MC event weight
-- mass, $p_T$, $\eta$, $\phi$, and number of charged constituents of the jets
-- weight which makes the $p_T$ distribution flat
-- large-R jet truth labels (1 for top, 2 for W, 10 for QCD)
-- signal/background label (1 for signal, 0 for background)
-- GN2X scores (if available)
+### Signal configuration
 
-Some of these are already stored as attributes of the graphs, and they could all be, but the graphs can take a long time to load,
-so it can be useful to have a separate file for plots which don't require the Lund trees.
+The jet selection cuts are controlled by `configs/config_signal_SRJ.yaml`, which defines a single `srj` block:
 
-### Configuration and parameters for `Make_data.py`
+- **Signal**: truth labels 1--5 (light quarks + charm + bottom)
+- **Background**: truth labels $-1$ and 21 (other + gluons)
+- $p_T \in [20, 160]$ GeV, $|\eta| \in [3.2, 4.5]$, no mass cut, min 3 splittings
+- No DSID-based splitting (SRJ files are already mixed)
+- Reweighting is handled at the preprocessing stage rather than via histogram files
 
-The configuration is defined in `configs/config_make_data.yaml`. The path to this config file must be given as a command-line argument, as in the example above.
+The signal config file to use and which block to select are specified in the main data config (`config_make_data_SRJ.yaml`) under the `signal_config_file` and `signal` keys.
 
-In this file, you can set:
-
-- the input and output file paths,
-- fractions of the data to save in separate files - this can be used for train/test splits, or memory management,
-as the events are loaded and processed in chunks of sizes determined by these fractions
-- a value for the optional $k_T$ cut
-
-The script uses another configuration file, `config_signal.yaml`, which contains parameter sets for several signal samples.
-The path to this file and the choice of parameter set from it are also specified in `config_make_data.yaml` under the `signal_config_file` and `signal` keys, respectively.
-The parameters in `config_signal.yaml` include values for the selection cuts (mass, $p_T$, minimum number of splittings)
-and paths to files with histograms of the $p_T$ distributions of the jets, which are used to calculate the $p_T$ weights
-so that they are proportional to 1/(bin count).
-These histograms are included in the repository; they are located in the `histos` folder.
-They can be created with the `make_histos.py` script, which also applies mass and $pT$ cuts from `config_signal.yaml`.
-
-Rather than choosing a single signal configuraion, the `signal` key in `config_make_data.yaml` can also be set to `all`,
-in which case the script will combine the selections (to include jets which pass any of the selections)
-and store multiple sets of flat-pT weights (in both the graphs and ROOT files), one for each signal configuration.
-The main reason for this is that you don't have to process the background jets (QCD) multiple times,
-and there is no need to have multiple QCD graphs files with slightly different selections.
-Instead, when later using the file, you can choose which set of weights to use and apply corresponding selection cuts.
-If saving multple sets of weights, they will be saved with the signal configuration identifier as a suffix in the branch/attribure names.
-You can also do this with a single signal configuration by setting `signal_name_in_weight` to `True` in `config_make_data.yaml`,
-in order to have matching names between the signal files where you would probably only use 1 configuration and the background files where you might want to use multiple configurations.
-
-You can override any of the parameters in `config_make_data.yaml` except `event_fractions` using the `--override` command-line argument; for example:
+You can override parameters using the `--override` command-line argument:
 
 ```bash
-python Make_data.py configs/config_make_data.yaml --override path_to_rootfiles="/path/to/root/files/*.root" id="QCD" kT_cut=0.5
+python Make_data_SRJ.py configs/config_make_data_SRJ.yaml --override signal_config_file="configs/config_signal_SRJ.yaml" id="dijet" signal="srj"
 ```
 
-The values for the override arguments should be in the YAML format - e.g. `null` will be interpreted as `None` and `.inf` as `float('inf')`.
 
-Warning: if you override `event_fractions`, the code will run without error, but it will only be done correctly if you use the all the same keys. So it's best to avoid overriding it via the command line and instead edit the config file directly.
+## Models
+
+### LundNet
+
+The primary model. LundNet is a graph neural network that operates on the Lund jet plane representation of jets. It uses six stacked EdgeConv layers with batch normalisation, where each layer learns edge features from pairs of connected nodes in the Lund tree. The outputs of all six layers are concatenated (skip connections), passed through a fully connected layer, pooled across all nodes via global mean pooling, and then combined with the number of charged tracks ($N_\text{trk}$) before a final classification head produces a signal probability.
+
+### QLundNet
+
+A quantum-hybrid variant of LundNet. QLundNet replaces the first EdgeConv layer with a `QuantumEdgeConv` layer, which routes edge features through a parameterised quantum circuit before returning to classical processing. The remaining five EdgeConv layers are classical.
+
+The quantum circuit works as follows:
+1. **Classical preprocessing**: an MLP maps the concatenated edge features $[x_i \| x_j]$ down to a dimension suitable for the quantum circuit ($n_\text{qubits} \times 2$), with a Tanh activation to normalise values to $[-1, 1]$.
+2. **Input encoding**: features are encoded into qubit states using $R_X$ and $R_Y$ rotation gates (two features per qubit).
+3. **Parameterised layers**: each quantum layer applies IsingXX entangling gates between adjacent qubits followed by trainable $R_X$ / $R_Y$ rotations. The rotation angles are learnable parameters optimised via backpropagation through PennyLane.
+4. **Measurement**: Pauli-Z expectation values are measured on each qubit, producing one classical output per qubit.
+5. **Classical postprocessing**: an MLP maps the measurement outputs to the desired feature dimension, followed by batch normalisation and ReLU.
+
+The quantum circuit uses 4 qubits and 1--3 quantum layers by default. It attempts to use GPU-accelerated simulation (`lightning.gpu`) and falls back to `lightning.qubit` or `default.qubit`. QLundNet requires PennyLane (`pip install pennylane`).
+
+### Combiner
+
+The Combiner is a small MLP that fuses the output scores of two independently trained taggers into a single combined score. It takes five inputs: the logit-transformed scores from tagger A and tagger B, the total number of jet constituents ($N_\text{const}$), the number of charged constituents ($N_\text{const,charged}$), and the jet mass ($m$).
+
+The raw scores from each tagger are converted to logits via $\text{logit}(p) = \ln(p / (1 - p))$ before being fed into a two-hidden-layer MLP (hidden size configurable, default 64) with ReLU activations and a sigmoid output. The model is trained with a pairwise ranking loss that directly optimises AUC by penalising cases where a signal jet is ranked below a background jet.
 
 
-## Training
+## Pipelines
 
-For the training, the main changes one should do are in the configuration file: `config_ONLY_TRAIN.yaml`.
-In this file you will define the learning rate, batch size, the input files, the model to use, the location to save your checkpoints.
+### LundNet / QLundNet pipeline
 
-To run the training:
+The SRJ quark/gluon tagging pipeline. QLundNet uses exactly the same scripts — just set `choose_model: QLundNet` in the training config. The pipeline adds a dedicated preprocessing step for feature standardisation and $p_T$/$\eta$ flattening.
 
+| Step | Script | Config | SLURM submit |
+|------|--------|--------|--------------|
+| 1. Build graphs from derivations | `Make_data_SRJ.py` | `configs/config_make_data_SRJ.yaml` | `sbatch submit/submit_slurm_make_data.sh` (array job) |
+| 2. Preprocess (standardise + flatten) | `preprocess_SRJ_CPU.py` | `configs/config_preprocess_SRJ.yaml` | `sbatch submit/submit_preprocess.sh` |
+| 3. Train | `weight_ONLY_TRAINS_SRJ.py` | `configs/config_ONLY_TRAIN_SRJ.yaml` | `sbatch submit/submit_slurm_train.sh` |
+| 4. Score | `test_make_scores_SRJ.py` | `configs/config_make_scores_SRJ.yaml` | `sbatch submit/submit_slurm_scores.sh` |
+
+**Step 1** applies selection cuts from `config_signal_SRJ.yaml`, builds Lund tree graphs (`torch_geometric.data.Data`), and outputs graph files and a ROOT file with jet properties. Runs as a SLURM array job (one task per `event_fraction` slice).
+
+**Step 2** loads the raw graphs from step 1, applies jet selection cuts (configurable $p_T$, $\eta$, mass ranges from `config_signal_SRJ.yaml`), standardises node features using precomputed mean/std from a JSON file, and optionally flattens the $p_T$ and $\eta$ distributions. Outputs separate train and test `.pt` files. Runs on the COMPUTE partition (CPU only, high memory).
+
+**Step 3** trains the model. Set the model architecture (`LundNet`, `QLundNet`, etc.) via `architecture.choose_model` in the config. Checkpoints are saved every epoch. Optional CLI overrides:
 ```bash
-python weight_ONLY_TRAINS.py configs/config_ONLY_TRAIN.yaml
+python weight_ONLY_TRAINS_SRJ.py configs/config_ONLY_TRAIN_SRJ.yaml --ln_kT_cut 0 --do_combined_training true
 ```
 
-There are two optional arguments which can be used to override the values in the config file:
+**Step 4** loads one or more trained checkpoints and writes per-jet scores to a ROOT file. The config supports evaluating multiple models in a single run (each with its own tag and checkpoint), and scores are written as separate branches. Paths support `{sample}` and `{kT_cut}` placeholders for easy switching between datasets.
 
-- `--ln_kT_cut`: float
-- `--do_combined_training`: value can be true/false, yes/no, 0/1, case insensitive
+### Combiner pipeline
 
-For example:
+The Combiner trains on top of existing tagger scores rather than raw graphs. It requires that you have already scored your test data with at least two taggers (e.g. LundNet and ParT) so that the ROOT file contains score branches for both.
 
-```bash
-python weight_ONLY_TRAINS.py configs/config_ONLY_TRAIN.yaml --ln_kT_cut 0 --do_combined_training true
-```
+| Step | Script | Config | SLURM submit |
+|------|--------|--------|--------------|
+| 1. Train combiner | `weight_ONLY_TRAINS_COMBINER_SRJ.py` | `configs/config_ONLY_TRAIN_COMBINER_SRJ.yaml` | `sbatch submit/submit_slurm_train_combiner.sh` |
+| 2. Score with combiner | `make_scores_combiner_SRJ.py` | `configs/config_make_scores_combiner_SRJ.yaml` | `sbatch submit/submit_slurm_scores_combiner.sh` |
 
-## Testing
+**Step 1** reads score branches (e.g. `fjet_LundNet_FTAG1_score` and `parT_score`) plus `fjet_Nconst`, `fjet_Nconst_Charged`, and `fjet_m` from a ROOT file, splits into train/validation, and trains the Combiner MLP with pairwise ranking loss. Checkpoints and a validation loss log are saved each epoch.
 
-Run the testing:
+**Step 2** runs both the LundNet model and the trained Combiner end-to-end: it first scores jets with LundNet on the graph data, reads the existing ParT scores from the ROOT file, then passes all five features (LundNet score, ParT score, $N_\text{const}$, $N_\text{const,charged}$, $m$) through the Combiner to produce a final combined score. All scores (LundNet and Combined) are written as branches to the output ROOT file.
 
-```bash
-python test_make_scores.py configs/config_make_scores.yaml
-```
 
-Some paths and names in the configuration file can have placeholders that are replaced by values of other parameters,
-namely by the values of `kT_cut` and `sample`.
-This makes it easy to run on different samples:
-if you keep the paths to your samples and output files the same apart from a single segment that is different for every sample,
-you can just change the `sample` parameter in the config file without having to change several different variables
-(`paths_to_test_file_root`, `paths_to_test_file_graphs`, `path_to_outdir`, and `output_name`).
+## Results
 
-In the configuration file, you can also specify the name of the branch to save the scores to.
-If the specified output already exists and has a branch with the same name,
-the branch will be overwritten; otherwise, it will be added to the file.
-In both cases the other branches will be preserved.
-This means you can run multiple times on the same test files and with the same output file,
-changing the model and score branch name each time to produce a single ROOT file with multiple sets of scores.
+The `results/` directory contains ROOT files with scored jets for two kinematic regions:
 
-You can override any of the parameters in `config_make_scores.yaml` using the `--override` command-line argument. To override a value specified in the config file like this:
+- **`results/pt_160_eta_3.2_4.5/`** — forward region: $p_T > 160$ GeV, $|\eta| \in [3.2, 4.5]$. Contains LundNet, QLundNet, and Combiner scores across several train/test splits and FTAG1 samples.
+- **`results/pt_160_1300_eta_0_1.2/`** — central region: $p_T \in [160, 1300]$ GeV, $|\eta| \in [0, 1.2]$. Contains LundNet and Combiner scores.
 
-```yaml
-key:
-  subkey: value
-```
-
-you can use the following syntax:
-
-```bash
-python test_make_scores.py configs/config_make_scores.yaml --override key.subkey=value
-```
-
-For example:
-
-```bash
-python test_make_scores.py configs/config_make_scores.yaml --override data.sample=Sherpa_Cluster data.kT_cut=0
-```
+Each subdirectory corresponds to a different train/test configuration (e.g. `70%train30%test/`, `40%40%/`, `1Mtrain2Mtest/`). Combiner results are nested under their own subdirectories within these.
 
 
 ## Plotting
 
-To plot using the code in the plotting folder, you must first combine the ROOT file outputs of the testing scripts
-into a single file:
-
-```bash
-hadd -f tree.root user.*root
-```
-
-In a clean and new terminal, go to the plotting repo and source the setup file. 
-It will get the version of the libraries you want to use from /cvmfs/. 
-Go to plotting.py and check that you are using the root file you just created with hadd after the testing of the model. 
-Plot! 
-```
-source setup.sh
-python -b plotting.py 
-```
-
-## To do list: 
-- [ ] Cut on ln(kt): prepare multiple graphs with different values of ln(kT) cuts 
-- [ ] Make a bkg rej vs ln(kT) plot
-- [ ] Make the LundJetPlane plot with the prediction to see where the modeling uncertainties impact the most
-- [ ] Apply a shift of 5% to mean pT of the constituent, and test on that sample
-- [ ] Apply a shift of 5% to resolution pT of the constituent, and test on that sample
+Plots are produced using the `plotting_SRJ.ipynb` Jupyter notebook. Point it at the ROOT file(s) in `results/` and run the cells to generate ROC curves, score distributions, and other performance plots.
